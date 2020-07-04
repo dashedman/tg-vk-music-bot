@@ -259,6 +259,7 @@ def start_bot(WEB_HOOK_FLAG = True):
             VK_PASSWORD: {}
             TG_URL: {}
             TG_SHELTER: {}
+            WEB HOOK: {}
             WEBHOOK_DOMEN: {}
             WEBHOOK_URL: {}
             MUSIC_LIST_LENGTH: {}""".format(TG_TOKEN,
@@ -266,6 +267,7 @@ def start_bot(WEB_HOOK_FLAG = True):
             VK_PASSWORD,
             TG_URL,
             TG_SHELTER,
+            WEB_HOOK_FLAG,
             WEBHOOK_DOMEN,
             WEBHOOK_URL,
             MUSIC_LIST_LENGTH))
