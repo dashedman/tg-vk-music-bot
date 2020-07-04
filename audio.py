@@ -326,6 +326,7 @@ def scrap_data(html, user_id, filter_root_el=None, convert_m3u8_links=True, http
         if 'audio_item_disabled' in audio['class']:
             continue
 
+
         data_audio = json.loads(audio['data-audio'])
         data_audio[13] = re.sub('(/+)', '/', data_audio[13].strip('/')).split('/')
         if len(data_audio[13]) == 6:
@@ -348,7 +349,9 @@ def scrap_data(html, user_id, filter_root_el=None, convert_m3u8_links=True, http
         result = http.post(
             'https://m.vk.com/audio',
             data={'act': 'reload_audio', 'ids': ','.join(['_'.join(i) for i in ids_group])}
-        ).json()
+        )
+
+        result = result.json()
 
         last_request = time.time()
         if result['data']:

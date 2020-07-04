@@ -290,14 +290,14 @@ def start_bot(WEB_HOOK_FLAG = True):
 
         #autetifications in vk
         print("Vk autentification...")
-        vk_session = VkApi(VK_LOGIN, VK_PASSWORD)
+        vk_session = VkApi(VK_LOGIN, VK_PASSWORD, auth_handler=tg_lib.auth_handler)
         vk_session.auth()
         #vk audio class for fetching music
         vk_audio = VkAudioExtended(vk_session)
-        for i,a in enumerate(vk_audio.search_iter("Sex appeal")):#get_iter()):#
+        '''for i,a in enumerate(vk_audio.get_iter(192571881)):#earch_iter("Sex appeal")):#
             print(i,a)
             break
-        return
+        return'''
         #pick type of listener
         if WEB_HOOK_FLAG:
             #run sanic server

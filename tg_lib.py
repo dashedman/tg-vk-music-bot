@@ -61,6 +61,9 @@ class VkAudioExtended(VkAudio):
             return ''
 
 
+def auth_handler():
+    return input("Key code:"), False
+
 def callback_button(text = '', callback_data = ''):
     return {
         'text':text,
