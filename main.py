@@ -1,7 +1,7 @@
 import asyncio
 import sqlite3
 import time
-import re
+#import re
 import json
 import sys
 import os
