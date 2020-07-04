@@ -29,6 +29,8 @@ from tg_lib import VkAudioExtended
 with open("botdata.ini","r") as f:
     TG_TOKEN = f.readline()[:-1]
     WEBHOOK_DOMEN = f.readline()[:-1]
+    HOST_IP = f.readline()[:-1]
+    PORT = int(f.readline()[:-1])
     VK_LOGIN = f.readline()[:-1]
     VK_PASSWORD = f.readline()[:-1]
 
@@ -147,7 +149,7 @@ async def workerCallback(vk_audio, db, callback):
 
     if command == 'd' :
         audio_id = data[0]+'_'+data[1]
-        
+
         #check audio in old loads
         if audio_data := tg_lib.db_get_audio(db, audio_id):
             telegram_id, audio_size = audio_data
@@ -217,7 +219,7 @@ def WHlistener(vk_audio, db):
     asyncio.run(setWebhook(WEBHOOK_URL))
 
     print("Listening...")
-    app_listener.run(port = 88)
+    app_listener.run(host = HOST_IP, port = PORT)
 
 #long poling listener
 #requests only
@@ -263,7 +265,8 @@ def start_bot(WEB_HOOK_FLAG = True):
             WEB HOOK: {}
             WEBHOOK_DOMEN: {}
             WEBHOOK_URL: {}
-            MUSIC_LIST_LENGTH: {}""".format(TG_TOKEN,
+            HOST_IP: {}
+            PORT: {}""".format(TG_TOKEN,
             VK_LOGIN,
             VK_PASSWORD,
             TG_URL,
@@ -271,7 +274,8 @@ def start_bot(WEB_HOOK_FLAG = True):
             WEB_HOOK_FLAG,
             WEBHOOK_DOMEN,
             WEBHOOK_URL,
-            MUSIC_LIST_LENGTH))
+            HOST_IP,
+            PORT))
 
     try:
         #database loading
