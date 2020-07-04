@@ -147,9 +147,9 @@ async def workerCallback(vk_audio, db, callback):
 
     if command == 'd' :
         audio_id = data[0]+'_'+data[1]
+        
         #check audio in old loads
-        audio_data = tg_lib.db_get_audio(db, audio_id)
-        if audio_data:
+        if audio_data := tg_lib.db_get_audio(db, audio_id):
             telegram_id, audio_size = audio_data
             #send id from old audio in telegram
             await sendAudio(callback['message']['chat']['id'], \
