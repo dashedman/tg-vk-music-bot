@@ -294,7 +294,10 @@ def start_bot(WEB_HOOK_FLAG = True):
         vk_session.auth()
         #vk audio class for fetching music
         vk_audio = VkAudioExtended(vk_session)
-
+        for i,a in enumerate(vk_audio.search_iter("Sex appeal")):#get_iter()):#
+            print(i,a)
+            break
+        return
         #pick type of listener
         if WEB_HOOK_FLAG:
             #run sanic server
