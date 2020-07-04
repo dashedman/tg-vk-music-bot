@@ -30,9 +30,10 @@ with open("botdata.ini","r") as f:
     TG_TOKEN = f.readline()[:-1]
     WEBHOOK_DOMEN = f.readline()[:-1]
     HOST_IP = f.readline()[:-1]
-    PORT = int(f.readline()[:-1])
     VK_LOGIN = f.readline()[:-1]
     VK_PASSWORD = f.readline()[:-1]
+
+PORT = os.environ.get('PORT')
 
 TG_URL = "https://api.telegram.org/bot"+ TG_TOKEN +"/"
 TG_SHELTER = -479340226
