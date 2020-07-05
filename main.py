@@ -9,6 +9,7 @@ import os
 
 from pprint import pprint
 from collections import namedtuple
+from copy import deepcopy
 
 #import requests
 #asynchronious requests-like
@@ -25,6 +26,7 @@ from sanic.response import json as sanic_json
 #my local lib
 import tg_lib
 from tg_lib import VkAudioExtended
+from ui_constants import *
 
 #constants
 with open("botdata.ini","r") as f:
@@ -42,6 +44,7 @@ WEBHOOK_URL = "https://"+ WEBHOOK_DOMEN +"/"+ TG_TOKEN +"/"
 
 MEGABYTE_SIZE = 1<<20
 MUSIC_LIST_LENGTH = 7
+
 
 #functions
 
@@ -108,13 +111,11 @@ async def sendAudio(chat_id, file = None, url = None, telegram_id = None, **kwar
         raise("no ok")
     return r['result']
 
-
-#asynchronious worker for proceed incoming messages
-async def workerMsg(vk_audio, db, msg):
-    print('Message:',msg['text'])
+#msg demon-worker functions
+async def seek_and_send(vk_audio, db, msg, request = None):
+    if not request: request = msg['text']
     #seek music in vk
-    res_generator = vk_audio.search_iter(msg['text'])
-
+    res_generator = vk_audio.search_iter(request)
     #get firsts 7
     musiclist = []
     for i in range(MUSIC_LIST_LENGTH):
@@ -122,7 +123,6 @@ async def workerMsg(vk_audio, db, msg):
             musiclist.append( next(res_generator) )
         except StopIteration:
             break
-
     #construct inline keyboard for list
     inline_keyboard = []
     for music in musiclist:
@@ -143,7 +143,107 @@ async def workerMsg(vk_audio, db, msg):
                         {'inline_keyboard':inline_keyboard}, \
                         msg['message_id'])
 
-#asynchronious worker for proceed incoming callbacks
+async def send_popular(vk_audio, db, msg):
+    #seek music in vk
+    res_generator = vk_audio.get_popular_iter()
+    #get firsts 7
+    musiclist = []
+    for i in range(MUSIC_LIST_LENGTH):
+        try:
+            musiclist.append( next(res_generator) )
+        except StopIteration:
+            break
+    #construct inline keyboard for list
+    inline_keyboard = []
+    for music in musiclist:
+        #print(music)
+        duration = time.gmtime(music['duration'])
+        inline_keyboard.append([tg_lib.callback_button( \
+                                    '{} - {} ({}:{:02})'.format(music['artist'], \
+                                                             music['title'], \
+                                                             duration.tm_min, \
+                                                             duration.tm_sec), \
+                                    '{}@{}@{}'.format('d', \
+                                                      music['owner_id'], \
+                                                      music['id'])
+                                )])
+    #send answer
+    await sendKeyboard(msg['chat']['id'], \
+                        msg['text'], \
+                        {'inline_keyboard':inline_keyboard}, \
+                        msg['message_id'])
+
+async def command_demon(vk_audio, db, msg, command = None):
+    if not command: command = msg['text'][1:]
+
+    if command == 'start':
+        await sendKeyboard(msg['chat']['id'], \
+                            msg['text'], \
+                            {'keyboard': MAIN_KEYBOARD,
+                             'resize_keyboard': True,
+                             'one_time_keyboard': True}, \
+                            msg['message_id'])
+    if command[:2] == 'f ':
+        await seek_and_send(vk_audio, db, msg, command[2:])
+    if command[:5] == 'find ':
+        await seek_and_send(vk_audio, db, msg, command[5:])
+    if command == 'popular' or command == 'chart':
+        await send_popular(vk_audio, db, msg)
+    if command == 'help':
+        await sendMessage(msg['chat']['id'], \
+                            HELP_TEXT)
+    if command == 'quick':
+        await sendMessage(msg['chat']['id'], \
+                            QUICK_TEXT)
+    if command == 'about':
+        await sendMessage(msg['chat']['id'], \
+                            ABOUT_TEXT)
+    if command == 'settings':
+        tmp_settings_keyboard = deepcopy(SETTINGS_KEYBOARD)
+        tmp_settings_keyboard.append([{'text':'🙈 Listen only commands'
+                                               if tg_lib.all_mode_check(db, msg['chat']['id'])
+                                               else '🐵 Listen all message'}])
+
+        await sendKeyboard(msg['chat']['id'], \
+                            msg['text'], \
+                            {'keyboard': tmp_settings_keyboard,
+                             'resize_keyboard': True,
+                             'one_time_keyboard': True}, \
+                            msg['message_id'])
+
+    if command == 'all_mode_on':
+        tg_lib.all_mode_on(db, msg['chat']['id'])
+        await sendKeyboard(msg['chat']['id'], \
+                            'Mode enable!', \
+                            {'keyboard': MAIN_KEYBOARD,
+                             'resize_keyboard': True,
+                             'one_time_keyboard': True}, \
+                            msg['message_id'])
+    if command == 'all_mode_off':
+        tg_lib.all_mode_off(db, msg['chat']['id'])
+        await sendKeyboard(msg['chat']['id'], \
+                            'Mode disable!', \
+                            {'keyboard': MAIN_KEYBOARD,
+                             'resize_keyboard': True,
+                             'one_time_keyboard': True}, \
+                            msg['message_id'])
+
+
+
+#asynchronious workers
+async def workerMsg(vk_audio, db, msg):
+    print('Message:', msg['text'])
+
+    #if command
+    if msg['text'][0] == '/':
+        await command_demon(vk_audio, db, msg)
+    elif msg['text'] in KEYBOARD_COMMANDS:
+        await command_demon(vk_audio, db, msg, KEYBOARD_COMMANDS[msg['text']])
+    else:
+        #just message
+        if tg_lib.all_mode_check(db, msg['chat']['id']):
+            await seek_and_send(vk_audio, db, msg)
+
 async def workerCallback(vk_audio, db, callback):
     data = callback['data'].split('@')
     print('Callback data:', data)
@@ -205,8 +305,7 @@ def result_demon(vk_audio, db, result):
     else:
         pprint(result)
 
-
-#web hook listener
+#listeners
 #~~flask~~ vibora, requests
 def WHlistener(vk_audio, db):
 
@@ -223,7 +322,6 @@ def WHlistener(vk_audio, db):
     print(f"[{time.ctime()}] Listening...")
     app_listener.run(host = HOST_IP, port = PORT)
 
-#long poling listener
 #requests only
 async def LPlistener(vk_audio, db):
     LONGPOLING_OFFSET = 0
@@ -254,7 +352,7 @@ async def LPlistener(vk_audio, db):
             LONGPOLING_OFFSET = max(LONGPOLING_OFFSET,result['update_id'])+1
             result_demon(vk_audio, db, result)
 
-
+#start func
 def start_bot(WEB_HOOK_FLAG = True):
     print(f"[{time.ctime()}] Start...")
     #print important constants
@@ -297,6 +395,15 @@ def start_bot(WEB_HOOK_FLAG = True):
         except sqlite3.OperationalError:
             pass
 
+        try:
+            #all_mode table
+            db_cursor.execute(
+                """CREATE TABLE chat_modes
+                (id TEXT PRIMARY KEY,
+                mode BOOL NOT NULL)""")
+        except sqlite3.OperationalError:
+            pass
+
         #autetifications in vk
         print(f"[{time.ctime()}] Vk autentification...")
         vk_session = VkApi(VK_LOGIN, VK_PASSWORD, auth_handler=tg_lib.auth_handler)
@@ -331,11 +438,17 @@ def start_bot(WEB_HOOK_FLAG = True):
         raise(err)
 
 if __name__ == "__main__":
-    
+
     #parse args
     parser = argparse.ArgumentParser()
     parser.add_argument('-wh', action="store", dest="webhook_on", default=0, type=int)
+    parser.add_argument('-p', action="store", dest="port", default=None, type=int)
+    parser.add_argument('-i', action="store", dest="ip", default=None)
+    parser.add_argument('-d', action="store", dest="domen", default=None)
     args = parser.parse_args()
 
+    if args.port: PORT = args.port
+    if args.ip: HOST_IP = args.ip
+    if args.domen: WEBHOOK_DOMEN = args.domen
     #if main then start bot
     start_bot(bool(args.webhook_on))

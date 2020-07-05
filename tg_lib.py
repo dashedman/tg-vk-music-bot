@@ -1,8 +1,9 @@
+
 from vk_api.audio import VkAudio, scrap_data
 
 #my class that extend audio vk api class for popular and new music
 class VkAudioExtended(VkAudio):
-    def get_chart_iter(self,offset=0):
+    def get_popular_iter(self,offset=0):
         """ Искать популярные аудиозаписи  (генератор)
 
         :param offset: смещение
@@ -16,7 +17,12 @@ class VkAudioExtended(VkAudio):
             }
         )
 
-        tracks = tg_lib.scrap_data(response.text, self.user_id)
+        tracks = scrap_data(
+            response.text,
+            self.user_id,
+            convert_m3u8_links=self.convert_m3u8_links,
+            http=self._vk.http
+        )
 
         for track in tracks:
             yield track
@@ -34,7 +40,12 @@ class VkAudioExtended(VkAudio):
             }
         )
 
-        tracks = scrap_data(response.text, self.user_id)
+        tracks = scrap_data(
+            response.text,
+            self.user_id,
+            convert_m3u8_links=self.convert_m3u8_links,
+            http=self._vk.http
+        )
 
         for track in tracks:
             yield track
@@ -83,4 +94,39 @@ def db_put_audio(db, audio_id, telegram_id, audio_size):
         """INSERT INTO audios
         VALUES (?,?,?)"""
         , (audio_id, telegram_id, audio_size))
+    db.conn.commit()
+
+def all_mode_check(db, chat_id):
+    db.cursor.execute(
+        """SELECT mode FROM chat_modes
+        WHERE id=?"""
+        , (chat_id, ))
+    return bool(db.cursor.fetchone()[0])
+
+def all_mode_on(db, chat_id):
+    try:
+        db.cursor.execute(
+            """UPDATE chat_modes
+            SET mode=?
+            WHERE id=?"""
+            , (True, chat_id))
+    except sqlite3.IntegrityError:
+        db.cursor.execute(
+            """INSERT INTO chat_modes
+            VALUES (?,?)"""
+            , (chat_id, True))
+    db.conn.commit()
+
+def all_mode_off(db, chat_id):
+    try:
+        db.cursor.execute(
+            """UPDATE chat_modes
+            SET mode=?
+            WHERE id=?"""
+            , (False, chat_id))
+    except sqlite3.IntegrityError:
+        db.cursor.execute(
+            """INSERT INTO chat_modes
+            VALUES (?,?)"""
+            , (chat_id, False))
     db.conn.commit()
