@@ -331,6 +331,7 @@ def start_bot(WEB_HOOK_FLAG = True):
         raise(err)
 
 if __name__ == "__main__":
+    
     #parse args
     parser = argparse.ArgumentParser()
     parser.add_argument('-wh', action="store", dest="webhook_on", default=0, type=int)
