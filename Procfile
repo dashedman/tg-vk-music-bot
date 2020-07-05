@@ -1,1 +1,1 @@
-web: source env/bin/activate | python main.py -wh 1
+web: source env/Scripts/activate | python main.py -wh 1
