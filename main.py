@@ -1,7 +1,8 @@
 import asyncio
 import sqlite3
 import time
-#import re
+import re
+import argparse
 import json
 import sys
 import os
@@ -330,5 +331,10 @@ def start_bot(WEB_HOOK_FLAG = True):
         raise(err)
 
 if __name__ == "__main__":
+    #parse args
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-wh', action="store", dest="webhook_on", default=0, type=int)
+    args = parser.parse_args()
+
     #if main then start bot
-    start_bot(False)
+    start_bot(bool(args.webhook_on))
