@@ -219,7 +219,7 @@ def WHlistener(vk_audio, db):
 
     asyncio.run(setWebhook(WEBHOOK_URL))
 
-    print("Listening...")
+    print(f"[{time.ctime()}] Listening...")
     app_listener.run(host = HOST_IP, port = PORT)
 
 #long poling listener
@@ -232,7 +232,7 @@ async def LPlistener(vk_audio, db):
     await setWebhook()
 
     #start listen
-    print("Listening...")
+    print(f"[{time.ctime()}] Listening...")
     while True:
 
         #get new messages
@@ -255,7 +255,7 @@ async def LPlistener(vk_audio, db):
 
 
 def start_bot(WEB_HOOK_FLAG = True):
-    print("Start...")
+    print(f"[{time.ctime()}] Start...")
     #print important constants
     print("""
             TG_TOKEN: {}
@@ -280,7 +280,7 @@ def start_bot(WEB_HOOK_FLAG = True):
 
     try:
         #database loading
-        print("Database loading...")
+        print(f"[{time.ctime()}] Database loading...")
         db_connect = sqlite3.connect("botbase.db")
         db_cursor = db_connect.cursor()
 
@@ -297,7 +297,7 @@ def start_bot(WEB_HOOK_FLAG = True):
             pass
 
         #autetifications in vk
-        print("Vk autentification...")
+        print(f"[{time.ctime()}] Vk autentification...")
         vk_session = VkApi(VK_LOGIN, VK_PASSWORD, auth_handler=tg_lib.auth_handler)
         vk_session.auth()
         #vk audio class for fetching music
@@ -315,20 +315,20 @@ def start_bot(WEB_HOOK_FLAG = True):
             asyncio.run(LPlistener(vk_audio, db))
     except KeyboardInterrupt:
         #Force exit with ctrl+C
-        print("Key force exit.")
+        print(f"[{time.ctime()}] Key force exit.")
     except Exception as err:
         #Any error should send ping message to developer
-        print("я упал :с")
+        print(f"[{time.ctime()}] я упал :с")
         while True:
-            print("Пробую уведомить о падении...")
+            print(f"[{time.ctime()}] Пробую уведомить о падении...")
             try:
                 asyncio.run(sendMessage(TG_SHELTER, "я упал :с"))
             except Exception:
-                time.sleep(10)
+                time.sleep(60)
             else:
                 break
         raise(err)
 
 if __name__ == "__main__":
     #if main then start bot
-    start_bot()
+    start_bot(False)
