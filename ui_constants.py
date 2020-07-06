@@ -1,11 +1,12 @@
 MAIN_KEYBOARD = [[{'text':'🏃 Go!'}],
-                 [{'text':'🏅 Popular'}],
+                 [{'text':'👑 Popular'},{'text':'🆕 New songs'}],
                  [{'text':'❓ Help'},{'text':'🔨 Settings'},{'text':'📔 About'}]]
 
 SETTINGS_KEYBOARD = []
 
 KEYBOARD_COMMANDS = { '🏃 Go!':'quick',
-                      '🏅 Popular':'popular',
+                      '👑 Popular':'popular',
+                      '🆕 New songs':'new_songs',
                       '❓ Help':'help',
                       '🔨 Settings':'settings',
                       '📔 About':'about',
@@ -20,7 +21,7 @@ HELP_TEXT = """❓ Help
 🙈 You can enable 'all listen' mode in /settings.
 🐵 In this mode for searching music you can just enter '[music_name]' and send it.
 
-🏅 /popular or /chart to find most popular songs.
+👑 /popular or /chart to find most popular songs.
 
 /about me c:
 """

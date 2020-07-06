@@ -17,7 +17,8 @@ import requests_async as requests
 
 #vk_api...
 from vk_api import VkApi
-from vk_api.audio import VkAudio
+#from vk_api.audio import VkAudio
+from audio import VkAudio
 
 #asynchronious flask-like
 from sanic import Sanic
@@ -25,7 +26,6 @@ from sanic.response import json as sanic_json
 
 #my local lib
 import tg_lib
-from tg_lib import VkAudioExtended
 from ui_constants import *
 
 #constants
@@ -43,7 +43,7 @@ TG_SHELTER = -479340226
 WEBHOOK_URL = "https://"+ WEBHOOK_DOMEN +"/"+ TG_TOKEN +"/"
 
 MEGABYTE_SIZE = 1<<20
-MUSIC_LIST_LENGTH = 7
+MUSIC_LIST_LENGTH = 10
 
 
 #functions
@@ -51,6 +51,9 @@ MUSIC_LIST_LENGTH = 7
 #tg send functions
 async def setWebhook(url=''):
     await requests.post(TG_URL + 'setWebhook', json = {'url':url}, timeout=None)
+
+async def getWebhookInfo():
+    return await requests.post(TG_URL + 'getWebhookInfo', timeout=None)
 
 async def sendMessage(chat_id,text=""):
     data = {
@@ -173,8 +176,39 @@ async def send_popular(vk_audio, db, msg):
                         {'inline_keyboard':inline_keyboard}, \
                         msg['message_id'])
 
+async def send_new_songs(vk_audio, db, msg):
+    #seek music in vk
+    res_generator = vk_audio.get_news_iter()
+    #get firsts 7
+    musiclist = []
+    for i in range(MUSIC_LIST_LENGTH):
+        try:
+            musiclist.append( next(res_generator) )
+        except StopIteration:
+            break
+    #construct inline keyboard for list
+    inline_keyboard = []
+    for music in musiclist:
+        #print(music)
+        duration = time.gmtime(music['duration'])
+        inline_keyboard.append([tg_lib.callback_button( \
+                                    '{} - {} ({}:{:02})'.format(music['artist'], \
+                                                             music['title'], \
+                                                             duration.tm_min, \
+                                                             duration.tm_sec), \
+                                    '{}@{}@{}'.format('d', \
+                                                      music['owner_id'], \
+                                                      music['id'])
+                                )])
+    #send answer
+    await sendKeyboard(msg['chat']['id'], \
+                        msg['text'], \
+                        {'inline_keyboard':inline_keyboard}, \
+                        msg['message_id'])
+
 async def command_demon(vk_audio, db, msg, command = None):
     if not command: command = msg['text'][1:]
+    print(f'Command: /{command}')
 
     if command == 'start':
         await sendKeyboard(msg['chat']['id'], \
@@ -189,6 +223,8 @@ async def command_demon(vk_audio, db, msg, command = None):
         await seek_and_send(vk_audio, db, msg, command[5:])
     if command == 'popular' or command == 'chart':
         await send_popular(vk_audio, db, msg)
+    if command == 'new_songs':
+        await send_new_songs(vk_audio, db, msg)
     if command == 'help':
         await sendMessage(msg['chat']['id'], \
                             HELP_TEXT)
@@ -229,20 +265,22 @@ async def command_demon(vk_audio, db, msg, command = None):
                             msg['message_id'])
 
 
-
 #asynchronious workers
 async def workerMsg(vk_audio, db, msg):
-    print('Message:', msg['text'])
-
-    #if command
-    if msg['text'][0] == '/':
-        await command_demon(vk_audio, db, msg)
-    elif msg['text'] in KEYBOARD_COMMANDS:
-        await command_demon(vk_audio, db, msg, KEYBOARD_COMMANDS[msg['text']])
+    if 'text' in msg:
+        if msg['text'][0] == '/':
+            #if command
+            await command_demon(vk_audio, db, msg)
+        elif msg['text'] in KEYBOARD_COMMANDS:
+            #if keyboard
+            await command_demon(vk_audio, db, msg, KEYBOARD_COMMANDS[msg['text']])
+        else:
+            #just message
+            if tg_lib.all_mode_check(db, msg['chat']['id']):
+                print('Message:', msg['text'])
+                await seek_and_send(vk_audio, db, msg)
     else:
-        #just message
-        if tg_lib.all_mode_check(db, msg['chat']['id']):
-            await seek_and_send(vk_audio, db, msg)
+        pprint(msg)
 
 async def workerCallback(vk_audio, db, callback):
     data = callback['data'].split('@')
@@ -305,6 +343,7 @@ def result_demon(vk_audio, db, result):
     else:
         pprint(result)
 
+
 #listeners
 #~~flask~~ vibora, requests
 def WHlistener(vk_audio, db):
@@ -318,6 +357,12 @@ def WHlistener(vk_audio, db):
         return sanic_json({"ok": True})
 
     asyncio.run(setWebhook(WEBHOOK_URL))
+    response = asyncio.run(getWebhookInfo())
+    if response.json()['result']['url'] != WEBHOOK_URL:
+        print(f"[{time.ctime()}] WebHook wasn't setted!")
+        pprint(response.json())
+        print(f"[{time.ctime()}] Shut down...")
+        return
 
     print(f"[{time.ctime()}] Listening...")
     app_listener.run(host = HOST_IP, port = PORT)
@@ -380,7 +425,7 @@ def start_bot(WEB_HOOK_FLAG = True):
     try:
         #database loading
         print(f"[{time.ctime()}] Database loading...")
-        db_connect = sqlite3.connect("botbase.db")
+        db_connect = sqlite3.connect(".gitignore/botbase.db")
         db_cursor = db_connect.cursor()
 
         db = namedtuple('Database', 'conn cursor')(conn = db_connect, cursor = db_cursor)
@@ -409,11 +454,13 @@ def start_bot(WEB_HOOK_FLAG = True):
         vk_session = VkApi(VK_LOGIN, VK_PASSWORD, auth_handler=tg_lib.auth_handler)
         vk_session.auth()
         #vk audio class for fetching music
-        vk_audio = VkAudioExtended(vk_session)
-        '''for i,a in enumerate(vk_audio.get_iter(192571881)):#earch_iter("Sex appeal")):#
-            print(i,a)
-            break
-        return'''
+        vk_audio = VkAudio(vk_session)
+
+        '''gen = vk_audio.search_iter("молли",offset = 106)
+        for i in range(210):#
+            next(gen)
+        return #'''
+
         #pick type of listener
         if WEB_HOOK_FLAG:
             #run sanic server
@@ -449,6 +496,8 @@ if __name__ == "__main__":
 
     if args.port: PORT = args.port
     if args.ip: HOST_IP = args.ip
-    if args.domen: WEBHOOK_DOMEN = args.domen
+    if args.domen:
+        WEBHOOK_DOMEN = args.domen
+        WEBHOOK_URL = "https://"+ WEBHOOK_DOMEN +"/"+ TG_TOKEN +"/"
     #if main then start bot
     start_bot(bool(args.webhook_on))
