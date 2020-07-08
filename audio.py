@@ -568,16 +568,10 @@ def scrap_tracks(ids, user_id, http, convert_m3u8_links=True):
         if delay > 0:
             time.sleep(delay)
 
-        try:
-            result = http.post(
-                'https://m.vk.com/audio',
-                data={'act': 'reload_audio', 'ids': ','.join(['_'.join(i) for i in ids_group])}
-            ).json()
-        except requests.exceptions.ConnectionError:
-            result = http.post(
-                'https://m.vk.com/audio',
-                data={'act': 'reload_audio', 'ids': ','.join(['_'.join(i) for i in ids_group])}
-            ).json()
+        result = http.post(
+            'https://m.vk.com/audio',
+            data={'act': 'reload_audio', 'ids': ','.join(['_'.join(i) for i in ids_group])}
+        ).json()
 
         last_request = time.time()
         if result['data']:
