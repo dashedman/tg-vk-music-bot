@@ -274,9 +274,10 @@ class VkAudio(object):
         )
 
         json_response = json.loads(response.text.replace('<!--', ''))
-        #pprint(json_response)
 
-        while True:
+
+        while json_response['payload'][1][1]['playlist']:
+
             ids = scrap_ids(
                 json_response['payload'][1][1]['playlist']['list']
             )
@@ -301,7 +302,7 @@ class VkAudio(object):
                 if not tracks:
                     break
 
-                for it,track in enumerate(tracks):
+                for track in tracks:
                     yield track
 
             else:
@@ -369,7 +370,7 @@ class VkAudio(object):
                 if not tracks:
                     break
 
-                for it,track in enumerate(tracks):
+                for track in tracks:
                     yield track
 
             else:
@@ -434,7 +435,7 @@ class VkAudio(object):
                 if not tracks:
                     break
 
-                for it,track in enumerate(tracks):
+                for track in tracks:
                     yield track
 
             else:
@@ -567,10 +568,16 @@ def scrap_tracks(ids, user_id, http, convert_m3u8_links=True):
         if delay > 0:
             time.sleep(delay)
 
-        result = http.post(
-            'https://m.vk.com/audio',
-            data={'act': 'reload_audio', 'ids': ','.join(['_'.join(i) for i in ids_group])}
-        ).json()
+        try:
+            result = http.post(
+                'https://m.vk.com/audio',
+                data={'act': 'reload_audio', 'ids': ','.join(['_'.join(i) for i in ids_group])}
+            ).json()
+        except requests.exceptions.ConnectionError:
+            result = http.post(
+                'https://m.vk.com/audio',
+                data={'act': 'reload_audio', 'ids': ','.join(['_'.join(i) for i in ids_group])}
+            ).json()
 
         last_request = time.time()
         if result['data']:

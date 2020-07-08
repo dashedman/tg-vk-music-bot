@@ -2,7 +2,7 @@ MAIN_KEYBOARD = [[{'text':'🏃 Go!'}],
                  [{'text':'👑 Popular'},{'text':'🆕 New songs'}],
                  [{'text':'❓ Help'},{'text':'🔨 Settings'},{'text':'📔 About'}]]
 
-SETTINGS_KEYBOARD = []
+SETTINGS_KEYBOARD = [[{'text':'↩️ Back ↩️'}]]
 
 KEYBOARD_COMMANDS = { '🏃 Go!':'quick',
                       '👑 Popular':'popular',
@@ -10,16 +10,17 @@ KEYBOARD_COMMANDS = { '🏃 Go!':'quick',
                       '❓ Help':'help',
                       '🔨 Settings':'settings',
                       '📔 About':'about',
-                      '🐵 Listen all message':'all_mode_on',
-                      '🙈 Listen only commands':'all_mode_off'}
+                      '🐵 Listen to all message':'all_mode_on',
+                      '🙈 Listen only to commands':'all_mode_off',
+                      '↩️ Back ↩️':'start'}
 
 
 HELP_TEXT = """❓ Help
 
-🔍 To find music enter '/find [music_name]' or '/f [music_name]' and send it.
+🔍 To find music enter '/find [track_title]' or '/f [track_title]' and send it.
 
-🙈 You can enable 'all listen' mode in /settings.
-🐵 In this mode for searching music you can just enter '[music_name]' and send it.
+🙈 You can enable the 'all listen' mode in /settings.
+🐵 To search music in this mode, you can just enter '[track_title]' and send it.
 
 👑 /popular or /chart to find most popular songs.
 
@@ -27,7 +28,7 @@ HELP_TEXT = """❓ Help
 """
 
 QUICK_TEXT = """🏃 Quick!
-Just enter /f [music_name] 👇 and i'll try to find this! 🤝"""
+Just enter /f [track_title] 👇 and i'll try to find it! 🤝"""
 
 ABOUT_TEXT = """📔 About!
 
