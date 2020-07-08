@@ -599,7 +599,7 @@ def start_bot(WEB_HOOK_FLAG = True):
     try:
         #database loading
         print(f"[{time.ctime()}] Database loading...")
-        db_connect = sqlite3.connect(".gitignore/botbase.db")
+        db_connect = sqlite3.connect("botbase.db")
         db_cursor = db_connect.cursor()
 
         db = namedtuple('Database', 'conn cursor')(conn = db_connect, cursor = db_cursor)
