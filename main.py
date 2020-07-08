@@ -29,6 +29,17 @@ from sanic.response import json as sanic_json
 import tg_lib
 from ui_constants import *
 
+"""
+Create botdate.ini
+Example:
+
+1234567890:AaBbCcDdEeFfGgHhIiJjKkLL123456
+my-domen.webhook.com
+0.0.0.0
++71234567890
+my_vk_password
+
+"""
 #constants
 with open("botdata.ini","r") as f:
     TG_TOKEN = f.readline()[:-1]
