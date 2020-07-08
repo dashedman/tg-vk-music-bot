@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 import os
+import html
 
 from pprint import pprint
 from collections import namedtuple
@@ -187,6 +188,8 @@ async def seek_and_send(vk_audio, db, msg, request = None):
                             msg['message_id'])
         return
     #construct inline keyboard for list
+    inline_keyboard = tg_lib.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
+    '''
     inline_keyboard = []
     for music in musiclist:
         #print(music)
@@ -206,7 +209,7 @@ async def seek_and_send(vk_audio, db, msg, request = None):
         inline_keyboard[-1].append(tg_lib.callback_button( '▶️', f'e@{current_page+1}@{request}'))
     else:
         inline_keyboard[-1].append(tg_lib.callback_button( '⛔️', 'pass@'))
-    inline_keyboard[-1].append(tg_lib.callback_button( '⤴️ Hide', f'h@{current_page}@{request}'))
+    inline_keyboard[-1].append(tg_lib.callback_button( '⤴️ Hide', f'h@{current_page}@{request}'))'''
 
 
     #send answer
@@ -449,28 +452,7 @@ async def workerCallback(vk_audio, db, callback):
                     pass
 
         #construct inline keyboard for list
-        inline_keyboard = []
-        for music in musiclist:
-            #print(music)
-            duration = time.gmtime(music['duration'])
-            inline_keyboard.append([tg_lib.callback_button( \
-                                        f"{music['artist']} - {music['title']} ({duration.tm_min}:{duration.tm_sec:02})",
-                                        f"d@{music['owner_id']}@{music['id']}"
-                                    )])
-
-        inline_keyboard.append([])
-        if current_page > 1:
-            inline_keyboard[-1].append(tg_lib.callback_button( '◀️', f'e@{current_page-1}@{request}'))
-        else:
-            inline_keyboard[-1].append(tg_lib.callback_button( '⛔️', 'pass@'))
-
-        inline_keyboard[-1].append(tg_lib.callback_button( current_page, 'pass@'))
-
-        if NEXT_PAGE_FLAG:
-            inline_keyboard[-1].append(tg_lib.callback_button( '▶️', f'e@{current_page+1}@{request}'))
-        else:
-            inline_keyboard[-1].append(tg_lib.callback_button( '⛔️', 'pass@'))
-        inline_keyboard[-1].append(tg_lib.callback_button( '⤴️ Hide', f'h@{current_page}@{request}'))
+        inline_keyboard = tg_lib.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
 
         #send answer
         await editKeyboard(callback['message']['chat']['id'], \
@@ -480,7 +462,10 @@ async def workerCallback(vk_audio, db, callback):
     if command == 'h':
         current_page = int(data[0])
         request = data[1]
-        inline_keyboard = [[tg_lib.callback_button( '⤵️ Show', f'e@{current_page}@{request}')]]
+        inline_keyboard = [[{
+                             'text':'⤵️ Show',
+                             'callback_data': f'e@{current_page}@{request}'
+                            }]]
         await editKeyboard(callback['message']['chat']['id'], \
                             callback['message']['message_id'], \
                             {'inline_keyboard':inline_keyboard})
@@ -512,6 +497,7 @@ async def vk_ping_demon(vk_audio):
             print(f"Error: {e}")
             continue
         await asyncio.sleep(270)
+
 #listeners
 #~~flask~~ vibora, requests
 async def WHlistener(vk_audio, db):
@@ -536,8 +522,6 @@ async def WHlistener(vk_audio, db):
     server = app_listener.create_server(host = HOST_IP, port = PORT, return_asyncio_server=True)
     asyncio.create_task(server)
     await vk_ping_demon(vk_audio)
-
-
 
 #requests only
 async def LPlistener(vk_audio, db):

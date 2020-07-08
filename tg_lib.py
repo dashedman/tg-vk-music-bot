@@ -1,13 +1,51 @@
-
+import time
+import html
 
 def auth_handler():
     return input("Key code:"), False
 
-def callback_button(text = '', callback_data = ''):
-    return {
-        'text':text,
-        'callback_data':callback_data
-    }
+def get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page=1):
+    inline_keyboard = []
+    for music in musiclist:
+        #print(music)
+        duration = time.gmtime(music['duration'])
+        inline_keyboard.append([{
+                                    'text': html.unescape(f"{music['artist']} - {music['title']} ({duration.tm_min}:{duration.tm_sec:02})".replace("$#","&#")),
+                                    'callback_data':f"d@{music['owner_id']}@{music['id']}"
+                                }])
+
+    inline_keyboard.append([])
+    if current_page > 1:
+        inline_keyboard[-1].append({
+                                    'text': '◀️',
+                                    'callback_data': f'e@{current_page-1}@{request}'
+                                   })
+    else:
+        inline_keyboard[-1].append({
+                                    'text': '⛔️',
+                                    'callback_data': 'pass@'
+                                   })
+
+    inline_keyboard[-1].append({
+                                'text': current_page,
+                                'callback_data': 'pass@'
+                               })
+
+    if NEXT_PAGE_FLAG:
+        inline_keyboard[-1].append({
+                                    'text': '▶️',
+                                    'callback_data': f'e@{current_page+1}@{request}'
+                                   })
+    else:
+        inline_keyboard[-1].append({
+                                    'text': '⛔️',
+                                    'callback_data': 'pass@'
+                                   })
+    inline_keyboard[-1].append({
+                                'text': '⤴️ Hide',
+                                'callback_data': f'h@{current_page}@{request}'
+                               })
+    return inline_keyboard
 
 
 def db_get_audio(db, audio_id):
