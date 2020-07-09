@@ -1,6 +1,7 @@
 import time
 import html
 
+
 def auth_handler():
     return input("Key code:"), False
 
@@ -47,6 +48,31 @@ def get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page=1):
                                })
     return inline_keyboard
 
+async def get_music_list(generator, current_page=1, list_length = 1):
+    NEXT_PAGE_FLAG = False
+    musiclist = []
+    try:
+        musiclist.append( await generator.__anext__() )
+    except StopAsyncIteration:
+        pass
+    else:
+        for i in range(list_length-1):
+            try:
+                next_track = await generator.__anext__()
+                if next_track == musiclist[0]:break
+                musiclist.append(next_track)
+            except StopAsyncIteration:
+                break
+
+
+        else:
+            try:
+                 await generator.__anext__()
+                 NEXT_PAGE_FLAG = True
+            except StopAsyncIteration:
+                pass
+
+    return musiclist, NEXT_PAGE_FLAG
 
 def db_get_audio(db, audio_id):
     db.cursor.execute(

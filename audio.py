@@ -329,23 +329,96 @@ class VkAudio(object):
         :param offset: смещение
         """
 
+        response = self._vk.http.post(
+            'https://vk.com/audio',
+            data={
+                'block':'chart',
+                'section':'recoms'
+            }
+        )
+        json_response = json.loads(scrap_json(response.text))
+
+        ids = scrap_ids(
+            json_response['sectionData']['recoms']['playlist']['list']
+        )
+
+        #len(tracks) <= 10
+        if offset:
+            tracks = scrap_tracks(
+                ids[offset:],
+                self.user_id,
+                convert_m3u8_links=self.convert_m3u8_links,
+                http=self._vk.http
+            )
+        else:
+            tracks = scrap_tracks(
+                ids,
+                self.user_id,
+                convert_m3u8_links=self.convert_m3u8_links,
+                http=self._vk.http
+            )
+
+        for track in tracks:
+            yield track
+
+
+    def get_news_iter(self,offset=0):
+        """ Искать популярные аудиозаписи  (генератор)
+
+        :param offset: смещение
+        """
+
         offset_left = 0
 
         response = self._vk.http.post(
-            'https://vk.com/al_audio.php',
+            'https://vk.com/audio',
             data={
-                'al': 1,
-                'act': 'section',
-                'claim': 0,
-                'is_layer': 0,
-                'owner_id': self.user_id,
-                'section': 'recoms'
+                'block':'new_songs',
+                'section':'recoms'
             }
         )
-        json_response = json.loads(response.text.replace('<!--', ''))
-        #pprint(json_response)
+        json_response = json.loads(scrap_json(response.text))
+
+        ids = scrap_ids(
+            json_response['sectionData']['recoms']['playlist']['list']
+        )
+
+        #len(tracks) <= 10
+        if offset_left + len(ids) >= offset:
+            if offset_left >= offset:
+                tracks = scrap_tracks(
+                    ids,
+                    self.user_id,
+                    convert_m3u8_links=self.convert_m3u8_links,
+                    http=self._vk.http
+                )
+            else:
+                tracks = scrap_tracks(
+                    ids[offset - offset_left:],
+                    self.user_id,
+                    convert_m3u8_links=self.convert_m3u8_links,
+                    http=self._vk.http
+                )
+
+            for track in tracks:
+                yield track
+
+
+        offset_left += len(ids)
 
         while True:
+            response = self._vk.http.post(
+                'https://vk.com/al_audio.php',
+                data={
+                    'al': 1,
+                    'act': 'load_catalog_section',
+                    'section_id': json_response['sectionData']['recoms']['sectionId'],
+                    'start_from': json_response['sectionData']['recoms']['nextFrom']
+                }
+            )
+
+            json_response = json.loads(response.text.replace('<!--', ''))
+
             ids = scrap_ids(
                 json_response['payload'][1][1]['playlist']['list']
             )
@@ -373,86 +446,8 @@ class VkAudio(object):
                 for track in tracks:
                     yield track
 
-            else:
-                pass
 
             offset_left += len(ids)
-
-            response = self._vk.http.post(
-                'https://vk.com/al_audio.php',
-                data={
-                    'al': 1,
-                    'act': 'load_catalog_section',
-                    'section_id': json_response['payload'][1][1]['sectionId'],
-                    'start_from': json_response['payload'][1][1]['nextFrom']
-                }
-            )
-            json_response = json.loads(response.text.replace('<!--', ''))
-
-    def get_news_iter(self,offset=0):
-        """ Искать популярные аудиозаписи  (генератор)
-
-        :param offset: смещение
-        """
-
-        offset_left = 0
-
-        response = self._vk.http.post(
-            'https://vk.com/al_audio.php',
-            data={
-                'al': 1,
-                'act': 'section',
-                'claim': 0,
-                'is_layer': 0,
-                'owner_id': self.user_id,
-                'section': 'recoms'
-            }
-        )
-        json_response = json.loads(response.text.replace('<!--', ''))
-
-        while True:
-            ids = scrap_ids(
-                json_response['payload'][1][1]['playlists'][0]['list']
-            )
-
-            #len(tracks) <= 10
-            if offset_left + len(ids) >= offset:
-                if offset_left >= offset:
-                    tracks = scrap_tracks(
-                        ids,
-                        self.user_id,
-                        convert_m3u8_links=self.convert_m3u8_links,
-                        http=self._vk.http
-                    )
-                else:
-                    tracks = scrap_tracks(
-                        ids[offset - offset_left:],
-                        self.user_id,
-                        convert_m3u8_links=self.convert_m3u8_links,
-                        http=self._vk.http
-                    )
-
-                if not tracks:
-                    break
-
-                for track in tracks:
-                    yield track
-
-            else:
-                pass
-
-            offset_left += len(ids)
-
-            response = self._vk.http.post(
-                'https://vk.com/al_audio.php',
-                data={
-                    'al': 1,
-                    'act': 'load_catalog_section',
-                    'section_id': json_response['payload'][1][1]['sectionId'],
-                    'start_from': json_response['payload'][1][1]['nextFrom']
-                }
-            )
-            json_response = json.loads(response.text.replace('<!--', ''))
 
 
     def get_audio_by_id(self, owner_id, audio_id):
@@ -481,6 +476,7 @@ class VkAudio(object):
             return next(track)
         else:
             return ''
+
 
     def get_post_audio(self, owner_id, post_id):
         """ Получить список аудиозаписей из поста пользователя или группы
@@ -520,6 +516,14 @@ def scrap_ids(audio_data):
             ids.append(full_id)
 
     return ids
+
+def scrap_json(html_page):
+    """ Парсинг списка хэшей ауфдиозаписей новинок или популярных + nextFrom&sesionId """
+
+    find_json_pattern = r"new AudioPage\(.*?(\{.*\})"
+    fr = re.search(find_json_pattern, html_page).group(1)
+
+    return fr
 
 
 def scrap_ids_from_html(html, filter_root_el=None):

@@ -9,16 +9,18 @@ import os
 import html
 
 from pprint import pprint
-from collections import namedtuple
+from collections import namedtuple, deque
 from copy import deepcopy
 from functools import partial
 
 #import requests
 #asynchronious requests-like
+from requests.exceptions import ConnectionError
 import requests_async as requests
 
 #vk_api...
 from vk_api import VkApi
+from vk_api.async_extend import AsyncVkApi, AsyncVkAudio
 #from vk_api.audio import VkAudio
 from audio import VkAudio
 
@@ -57,8 +59,7 @@ WEBHOOK_URL = "https://"+ WEBHOOK_DOMEN +"/"+ TG_TOKEN +"/"
 
 MEGABYTE_SIZE = 1<<20
 MUSIC_LIST_LENGTH = 9
-IS_DOWLOAD = set()
-
+IS_DOWNLOAD = set()
 
 #functions
 
@@ -158,29 +159,17 @@ async def sendAudio(chat_id, file = None, url = None, telegram_id = None, **kwar
 async def seek_and_send(vk_audio, db, msg, request = None):
     if not request: request = msg['text']
     #seek music in vk
-    res_generator = vk_audio.search_iter(request)
-
-    NEXT_PAGE_FLAG = False
     current_page = 1
-    musiclist = []
-    try:
-        musiclist.append(next(res_generator))
-    except StopIteration:
-        pass
-    else:
-        for i in range(MUSIC_LIST_LENGTH-1):
-            try:
-                next_track = next(res_generator)
-                if next_track == musiclist[0]:break
-                musiclist.append( next_track )
-            except StopIteration:
-                break
+
+    while True:
+        try:
+            res_generator = vk_audio.search_iter(request)
+            musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
+        except ConnectionError:
+            print("лнх")
+            time.sleep(1)
         else:
-            try:
-                 next(res_generator)
-                 NEXT_PAGE_FLAG = True
-            except StopIteration:
-                pass
+            break
 
     if not musiclist:
         await sendMessage(msg['chat']['id'],
@@ -189,28 +178,6 @@ async def seek_and_send(vk_audio, db, msg, request = None):
         return
     #construct inline keyboard for list
     inline_keyboard = tg_lib.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
-    '''
-    inline_keyboard = []
-    for music in musiclist:
-        #print(music)
-        duration = time.gmtime(music['duration'])
-        inline_keyboard.append([tg_lib.callback_button( \
-                                    f"{music['artist']} - {music['title']} ({duration.tm_min}:{duration.tm_sec:02})",
-                                    f"d@{music['owner_id']}@{music['id']}"
-                                )])
-
-
-    inline_keyboard.append([
-        tg_lib.callback_button( '⛔️', 'pass@'),
-        tg_lib.callback_button( current_page, 'pass@'),
-
-    ])
-    if NEXT_PAGE_FLAG:
-        inline_keyboard[-1].append(tg_lib.callback_button( '▶️', f'e@{current_page+1}@{request}'))
-    else:
-        inline_keyboard[-1].append(tg_lib.callback_button( '⛔️', 'pass@'))
-    inline_keyboard[-1].append(tg_lib.callback_button( '⤴️ Hide', f'h@{current_page}@{request}'))'''
-
 
     #send answer
     await sendKeyboard(msg['chat']['id'], \
@@ -220,28 +187,21 @@ async def seek_and_send(vk_audio, db, msg, request = None):
 
 async def send_popular(vk_audio, db, msg):
     #seek music in vk
-    res_generator = vk_audio.get_popular_iter()
-    #get firsts 7
-    musiclist = []
-    for i in range(MUSIC_LIST_LENGTH):
+    current_page = 1
+
+    while True:
         try:
-            musiclist.append( next(res_generator) )
-        except StopIteration:
+            res_generator = vk_audio.get_popular_iter()
+            musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
+        except ConnectionError:
+            print("лнх")
+            time.sleep(1)
+        else:
             break
+
     #construct inline keyboard for list
-    inline_keyboard = []
-    for music in musiclist:
-        #print(music)
-        duration = time.gmtime(music['duration'])
-        inline_keyboard.append([tg_lib.callback_button( \
-                                    '{} - {} ({}:{:02})'.format(music['artist'], \
-                                                             music['title'], \
-                                                             duration.tm_min, \
-                                                             duration.tm_sec), \
-                                    '{}@{}@{}'.format('d', \
-                                                      music['owner_id'], \
-                                                      music['id'])
-                                )])
+    inline_keyboard = tg_lib.get_inline_keyboard(musiclist, "!popular", NEXT_PAGE_FLAG, current_page)
+
     #send answer
     await sendKeyboard(msg['chat']['id'], \
                         msg['text'], \
@@ -250,28 +210,22 @@ async def send_popular(vk_audio, db, msg):
 
 async def send_new_songs(vk_audio, db, msg):
     #seek music in vk
-    res_generator = vk_audio.get_news_iter()
-    #get firsts 7
-    musiclist = []
-    for i in range(MUSIC_LIST_LENGTH):
+
+    current_page = 1
+
+    while True:
         try:
-            musiclist.append( next(res_generator) )
-        except StopIteration:
+            res_generator = vk_audio.get_news_iter()
+            musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
+        except ConnectionError:
+            print("лнх")
+            time.sleep(1)
+        else:
             break
+
     #construct inline keyboard for list
-    inline_keyboard = []
-    for music in musiclist:
-        #print(music)
-        duration = time.gmtime(music['duration'])
-        inline_keyboard.append([tg_lib.callback_button( \
-                                    '{} - {} ({}:{:02})'.format(music['artist'], \
-                                                             music['title'], \
-                                                             duration.tm_min, \
-                                                             duration.tm_sec), \
-                                    '{}@{}@{}'.format('d', \
-                                                      music['owner_id'], \
-                                                      music['id'])
-                                )])
+    inline_keyboard = tg_lib.get_inline_keyboard(musiclist, "!new_songs", NEXT_PAGE_FLAG, current_page)
+
     #send answer
     await sendKeyboard(msg['chat']['id'], \
                         msg['text'], \
@@ -363,14 +317,14 @@ async def workerMsg(vk_audio, db, msg):
         else:
             #just message
             if tg_lib.all_mode_check(db, msg['chat']['id']):
-                print('Message:', msg['text'])
+                print(f"[{time.ctime()}] Message: {msg['text']}")
                 await seek_and_send(vk_audio, db, msg)
     else:
         pprint(msg)
 
 async def workerCallback(vk_audio, db, callback):
     data = callback['data'].split('@')
-    print('Callback data:', data)
+    print(f"[{time.ctime()}] Callback data: {data}")
     command, data = data[0], data[1:]
 
     if command == 'd' :
@@ -384,16 +338,28 @@ async def workerCallback(vk_audio, db, callback):
             #send id from old audio in telegram
             await sendAudio(callback['message']['chat']['id'], \
                             telegram_id = telegram_id,
-                            caption='{:.2f} MB t\n_via MusicForUs\_bot_'.format(audio_size).replace('.','\.'),
+                            caption=f'{audio_size:.2f} MB t\n_via MusicForUs\_bot_'.replace('.','\.'),
                             parse_mode='markdownv2')
 
         else:
-            IS_DOWLOAD.add(audio_id)
+            IS_DOWNLOAD.add(audio_id)
+
+            """
+            new_audio = vk_audio.get_audio_by_id(*data)
             new_audio = await asyncio.get_running_loop().run_in_executor(
                                                               None,
                                                               vk_audio.get_audio_by_id,
                                                               *data
-                                                         )
+                                                         )"""
+            while True:
+                try:
+                    new_audio = await vk_audio.get_audio_by_id(*data)
+                except ConnectionError:
+                    print("лнх")
+                    time.sleep(1)
+                else:
+                    break
+
             #download audio
             response = await requests.get(new_audio['url'])
             audio_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
@@ -404,6 +370,7 @@ async def workerCallback(vk_audio, db, callback):
                                         performer = new_audio['artist'],
                                         caption='{:.2f} MB f\n_via MusicForUs\_bot_'.format(audio_size).replace('.','\.'),
                                         parse_mode='markdownv2')
+            del new_audio
 
             #multiline comment
             '''
@@ -423,33 +390,27 @@ async def workerCallback(vk_audio, db, callback):
                                   audio_id, \
                                   response['audio']['file_id'],
                                   audio_size)
-            IS_DOWLOAD.discard(audio_id)
+            IS_DOWNLOAD.discard(audio_id)
 
     if command == 'e':
         current_page = int(data[0])
         request = data[1]
-        res_generator = vk_audio.search_iter(request, offset=(current_page-1)*MUSIC_LIST_LENGTH)
 
-        NEXT_PAGE_FLAG = False
-        musiclist = []
-        try:
-            musiclist.append(next(res_generator))
-        except StopIteration:
-            pass
-        else:
-            for i in range(MUSIC_LIST_LENGTH-1):
-                try:
-                    next_track = next(res_generator)
-                    if next_track == musiclist[0]:break
-                    musiclist.append( next_track )
-                except StopIteration:
-                    break
+        while True:
+            try:
+                if request == "!popular":
+                    res_generator = vk_audio.get_popular_iter(offset=(current_page-1)*MUSIC_LIST_LENGTH )
+                elif request == "!new_songs":
+                    res_generator = vk_audio.get_news_iter(offset=(current_page-1)*MUSIC_LIST_LENGTH )
+                else:
+                    res_generator = vk_audio.search_iter(request, offset=(current_page-1)*MUSIC_LIST_LENGTH )
+
+                musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
+            except ConnectionError:
+                print("лнх")
+                time.sleep(1)
             else:
-                try:
-                     next(res_generator)
-                     NEXT_PAGE_FLAG = True
-                except StopIteration:
-                    pass
+                break
 
         #construct inline keyboard for list
         inline_keyboard = tg_lib.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
@@ -474,7 +435,7 @@ async def workerCallback(vk_audio, db, callback):
         pass
 
 
-#demon for tg update
+#demons
 def result_demon(vk_audio, db, result):
     #just message
     if 'message' in result:
@@ -489,19 +450,12 @@ def result_demon(vk_audio, db, result):
         pprint(result)
     return
 
-async def vk_ping_demon(vk_audio):
-    while True:
-        try:
-            vk_audio._vk.http.head("https://vk.com/al_audio.php")
-        except Exception as e:
-            print(f"Error: {e}")
-            continue
-        await asyncio.sleep(270)
+
 
 #listeners
 #~~flask~~ vibora, requests
 async def WHlistener(vk_audio, db):
-
+    #asyncio.get_event_loop().set_debug(True)
     app_listener = Sanic(__name__)
 
     @app_listener.route('/{}/'.format(TG_TOKEN), methods = ['GET','POST'])
@@ -519,16 +473,16 @@ async def WHlistener(vk_audio, db):
         return
 
     print(f"[{time.ctime()}] Listening...")
-    server = app_listener.create_server(host = HOST_IP, port = PORT, return_asyncio_server=True)
+    server = app_listener.create_server(host = HOST_IP, port = PORT, return_asyncio_server=True, access_log = False)
     asyncio.create_task(server)
-    await vk_ping_demon(vk_audio)
+
 
 #requests only
 async def LPlistener(vk_audio, db):
     LONGPOLING_OFFSET = 0
     LONGPOLING_DELAY = 3
 
-    asyncio.create_task(vk_ping_demon(vk_audio))
+    asyncio.create_task(vk_queue_demon(vk_audio, db))
 
     #offwebhook
     await setWebhook()
@@ -553,6 +507,7 @@ async def LPlistener(vk_audio, db):
         #go to proceed all of them
         for result in r['result']:
             LONGPOLING_OFFSET = max(LONGPOLING_OFFSET,result['update_id'])+1
+
             result_demon(vk_audio, db, result)
 
 #start func
@@ -607,25 +562,23 @@ def start_bot(WEB_HOOK_FLAG = True):
         except sqlite3.OperationalError:
             pass
 
+        loop = asyncio.get_event_loop()
         #autetifications in vk
         print(f"[{time.ctime()}] Vk autentification...")
-        vk_session = VkApi(VK_LOGIN, VK_PASSWORD, auth_handler=tg_lib.auth_handler)
+        vk_session = AsyncVkApi(VK_LOGIN, VK_PASSWORD, auth_handler=tg_lib.auth_handler, loop = loop)
         vk_session.auth()
-        #vk audio class for fetching music
-        vk_audio = VkAudio(vk_session)
 
-        '''gen = vk_audio.search_iter("молли",offset = 106)
-        for i in range(210):#
-            next(gen)
-        return #'''
+        #vk audio class for fetching music
+        vk_audio = AsyncVkAudio(vk_session)
 
         #pick type of listener
         if WEB_HOOK_FLAG:
             #run sanic server
-            asyncio.run(WHlistener(vk_audio, db))
+            loop.create_task(WHlistener(vk_audio, db))
+            loop.run_forever()
         else:
             #run asyncronious listener
-            asyncio.run(LPlistener(vk_audio, db))
+            loop.run_until_complete(LPlistener(vk_audio, db))
     except (KeyboardInterrupt, ):
         #Force exit with ctrl+C
         print(f"[{time.ctime()}] Key force exit.")
@@ -635,7 +588,7 @@ def start_bot(WEB_HOOK_FLAG = True):
         while True:
             print(f"[{time.ctime()}] Пробую уведомить о падении...")
             try:
-                asyncio.run(sendMessage(TG_SHELTER, "я упал :с"))
+                pass#asyncio.run(sendMessage(TG_SHELTER, "я упал :с"))
             except Exception:
                 time.sleep(60)
             else:
@@ -643,8 +596,8 @@ def start_bot(WEB_HOOK_FLAG = True):
         raise(err)
 
 if __name__ == "__main__":
-
     #parse args
+
     parser = argparse.ArgumentParser()
     parser.add_argument('-wh', action="store", dest="webhook_on", default=0, type=int)
     parser.add_argument('-p', action="store", dest="port", default=None, type=int)
