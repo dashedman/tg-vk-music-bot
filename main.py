@@ -330,7 +330,7 @@ async def workerCallback(vk_audio, db, callback):
     if command == 'd' :
         audio_id = data[0]+'_'+data[1]
 
-        while audio_id in IS_DOWLOAD:
+        while audio_id in IS_DOWNLOAD:
             await asyncio.sleep(0.07)
         #check audio in old loads
         if audio_data := tg_lib.db_get_audio(db, audio_id):
@@ -436,13 +436,13 @@ async def workerCallback(vk_audio, db, callback):
 
 
 #demons
-def result_demon(vk_audio, db, result):
+async def result_demon(vk_audio, db, result):
     #just message
     if 'message' in result:
-        asyncio.create_task( workerMsg(vk_audio, db, result['message']) )
+        await workerMsg(vk_audio, db, result['message'])
     #callback
     elif 'callback_query' in result:
-        asyncio.create_task( workerCallback(vk_audio, db, result['callback_query']) )
+        await workerCallback(vk_audio, db, result['callback_query'])
     elif 'edited_message' in result:
         pass
     #unknow update
@@ -461,7 +461,7 @@ async def WHlistener(vk_audio, db):
     @app_listener.route('/{}/'.format(TG_TOKEN), methods = ['GET','POST'])
     async def receive_update(request):
         if request.method == "POST":
-            result_demon(vk_audio, db, request.json)
+            await result_demon(vk_audio, db, request.json)
         return sanic_json({"ok": True})
 
     await setWebhook(WEBHOOK_URL)
