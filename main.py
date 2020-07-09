@@ -13,6 +13,9 @@ from collections import namedtuple, deque
 from copy import deepcopy
 from functools import partial
 
+#ssl generate lib
+from OpenSSL import crypto
+
 #import requests
 #asynchronious requests-like
 from requests.exceptions import ConnectionError
@@ -57,15 +60,48 @@ TG_URL = "https://api.telegram.org/bot"+ TG_TOKEN +"/"
 TG_SHELTER = -479340226
 WEBHOOK_URL = "https://"+ WEBHOOK_DOMEN +"/"+ TG_TOKEN +"/"
 
+KEY_FILE = "bot.key"
+CERT_FILE = "bot.pem"
+CERT_DIR = "ssl_folder"
+SELF_SSL = True
+
 MEGABYTE_SIZE = 1<<20
 MUSIC_LIST_LENGTH = 9
 IS_DOWNLOAD = set()
 
 #functions
 
+#self-ssl
+def create_self_signed_cert(cert_dir):
+    k = crypto.PKey()
+    k.generate_key(crypto.TYPE_RSA, 1024)   #  размер может быть 2048, 4196
+
+    #  Создание сертификата
+    cert = crypto.X509()
+    cert.get_subject().C = "RU"   #  указываем свои данные
+    cert.get_subject().L = "Moscow"   #  указываем свои данные
+    cert.get_subject().O = "musicforus"   #  указываем свои данные
+    cert.get_subject().CN = WEBHOOK_DOMEN   #  указываем свои данные
+    cert.set_serial_number(1000)
+    cert.gmtime_adj_notBefore(0)
+    cert.gmtime_adj_notAfter(10*365*24*60*60)   #  срок "жизни" сертификата
+    cert.set_issuer(cert.get_subject())
+    cert.set_pubkey(k)
+    cert.sign(k, 'sha1')
+
+    with open(os.path.join(cert_dir, CERT_FILE), "wb") as f:
+        f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
+
+    with open(os.path.join(cert_dir, KEY_FILE), "wb") as f:
+        f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, k))
+
 #tg send functions
-async def setWebhook(url=''):
-    await requests.post(TG_URL + 'setWebhook', json = {'url':url}, timeout=None)
+async def setWebhook(url='', certificate=None):
+    await requests.post(
+        TG_URL + 'setWebhook',
+        json = {'url':url},
+        files = {'certificate':certificate} if certificate else None,
+        timeout=None)
 
 async def getWebhookInfo():
     return await requests.post(TG_URL + 'getWebhookInfo', timeout=None)
@@ -444,6 +480,23 @@ async def result_demon(vk_audio, db, result):
 #~~flask~~ vibora, requests
 async def WHlistener(vk_audio, db):
     #asyncio.get_event_loop().set_debug(True)
+
+    if SELF_SSL:
+        #create ssl for webhook
+        create_self_signed_cert(CERT_DIR)
+        with open(os.path.join(CERT_DIR, CERT_FILE), "rb") as f:
+            await setWebhook(WEBHOOK_URL, certificate = f)
+    else:
+        await setWebhook(WEBHOOK_URL)
+
+    response = await getWebhookInfo()
+    if response.json()['result']['url'] != WEBHOOK_URL:
+        print(f"[{time.ctime()}] WebHook wasn't setted!")
+        pprint(response.json())
+        print(f"[{time.ctime()}] Shut down...")
+        return
+
+
     app_listener = Sanic(__name__)
 
     @app_listener.route('/{}/'.format(TG_TOKEN), methods = ['GET','POST'])
@@ -451,14 +504,6 @@ async def WHlistener(vk_audio, db):
         if request.method == "POST":
             await result_demon(vk_audio, db, request.json)
         return sanic_json({"ok": True})
-
-    await setWebhook(WEBHOOK_URL)
-    response = await getWebhookInfo()
-    if response.json()['result']['url'] != WEBHOOK_URL:
-        print(f"[{time.ctime()}] WebHook wasn't setted!")
-        pprint(response.json())
-        print(f"[{time.ctime()}] Shut down...")
-        return
 
     print(f"[{time.ctime()}] Listening...")
     server = app_listener.create_server(host = HOST_IP, port = PORT, return_asyncio_server=True, access_log = False)
@@ -589,6 +634,7 @@ if __name__ == "__main__":
     parser.add_argument('-p', action="store", dest="port", default=None, type=int)
     parser.add_argument('-i', action="store", dest="ip", default=None)
     parser.add_argument('-d', action="store", dest="domen", default=None)
+    parser.add_argument('-s', action="store", dest="ssl", default=None, type=int)
     args = parser.parse_args()
 
     if args.port: PORT = args.port
@@ -596,5 +642,7 @@ if __name__ == "__main__":
     if args.domen:
         WEBHOOK_DOMEN = args.domen
         WEBHOOK_URL = "https://"+ WEBHOOK_DOMEN +"/"+ TG_TOKEN +"/"
+    if args.ssl != None:
+        SELF_SSL = bool(args.ssl)
     #if main then start bot
     start_bot(bool(args.webhook_on))
