@@ -166,8 +166,7 @@ async def seek_and_send(vk_audio, db, msg, request = None):
             res_generator = vk_audio.search_iter(request)
             musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
         except ConnectionError:
-            print("лнх")
-            time.sleep(1)
+            asyncio.sleep(1)
         else:
             break
 
@@ -194,8 +193,7 @@ async def send_popular(vk_audio, db, msg):
             res_generator = vk_audio.get_popular_iter()
             musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
         except ConnectionError:
-            print("лнх")
-            time.sleep(1)
+            asyncio.sleep(1)
         else:
             break
 
@@ -218,8 +216,7 @@ async def send_new_songs(vk_audio, db, msg):
             res_generator = vk_audio.get_news_iter()
             musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
         except ConnectionError:
-            print("лнх")
-            time.sleep(1)
+            asyncio.sleep(1)
         else:
             break
 
@@ -344,19 +341,11 @@ async def workerCallback(vk_audio, db, callback):
         else:
             IS_DOWNLOAD.add(audio_id)
 
-            """
-            new_audio = vk_audio.get_audio_by_id(*data)
-            new_audio = await asyncio.get_running_loop().run_in_executor(
-                                                              None,
-                                                              vk_audio.get_audio_by_id,
-                                                              *data
-                                                         )"""
             while True:
                 try:
                     new_audio = await vk_audio.get_audio_by_id(*data)
                 except ConnectionError:
-                    print("лнх")
-                    time.sleep(1)
+                    asyncio.sleep(1)
                 else:
                     break
 
@@ -407,8 +396,7 @@ async def workerCallback(vk_audio, db, callback):
 
                 musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
             except ConnectionError:
-                print("лнх")
-                time.sleep(1)
+                asyncio.sleep(1)
             else:
                 break
 
@@ -571,16 +559,13 @@ def start_bot(WEB_HOOK_FLAG = True):
         #vk audio class for fetching music
         vk_audio = AsyncVkAudio(vk_session)
 
-        #pick type of listener
-        if WEB_HOOK_FLAG:
-            #run sanic server
-            loop.create_task(WHlistener(vk_audio, db))
-            loop.run_forever()
-        else:
-            #run asyncronious listener
-            loop.run_until_complete(LPlistener(vk_audio, db))
+        #pick type of listener and run
+        loop.create_task((WHlistener if WEB_HOOK_FLAG else LPlistener)(vk_audio, db))
+        loop.run_forever()
+
     except (KeyboardInterrupt, ):
         #Force exit with ctrl+C
+        loop.close()
         print(f"[{time.ctime()}] Key force exit.")
     except Exception as err:
         #Any error should send ping message to developer
@@ -588,11 +573,12 @@ def start_bot(WEB_HOOK_FLAG = True):
         while True:
             print(f"[{time.ctime()}] Пробую уведомить о падении...")
             try:
-                pass#asyncio.run(sendMessage(TG_SHELTER, "я упал :с"))
+                asyncio.run(sendMessage(TG_SHELTER, "я упал :с"))
             except Exception:
                 time.sleep(60)
             else:
                 break
+        loop.close()
         raise(err)
 
 if __name__ == "__main__":
