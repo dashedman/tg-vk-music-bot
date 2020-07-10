@@ -540,7 +540,7 @@ async def LPlistener(vk_audio, db):
         for result in r['result']:
             LONGPOLING_OFFSET = max(LONGPOLING_OFFSET,result['update_id'])+1
 
-            async result_demon(vk_audio, db, result)
+            await result_demon(vk_audio, db, result)
 
 #start func
 def start_bot(WEB_HOOK_FLAG = True):
