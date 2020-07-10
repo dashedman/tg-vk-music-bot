@@ -62,7 +62,7 @@ TG_SHELTER = -479340226
 WEBHOOK_URL = "https://"+ WEBHOOK_DOMEN +"/"+ TG_TOKEN +"/"
 
 KEY_FILE = "bot.key"
-CERT_FILE = "bot.pem"
+CERT_FILE = "bot.crt"
 CERT_DIR = "ssl_folder"
 SELF_SSL = True
 
@@ -95,6 +95,8 @@ def create_self_signed_cert(cert_dir):
 
     with open(os.path.join(cert_dir, KEY_FILE), "wb") as f:
         f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, k))
+
+    return crypto.dump_publickey(crypto.FILETYPE_PEM, k)
 
 #tg send functions
 async def setWebhook(url='', certificate=None):
@@ -484,9 +486,8 @@ async def WHlistener(vk_audio, db):
 
     if SELF_SSL:
         #create ssl for webhook
-        create_self_signed_cert(CERT_DIR)
-        with open(os.path.join(CERT_DIR, CERT_FILE), "rb") as f:
-            await setWebhook(WEBHOOK_URL, certificate = f)
+        public_key = create_self_signed_cert(CERT_DIR)
+        await setWebhook(WEBHOOK_URL, certificate = public_key)
     else:
         await setWebhook(WEBHOOK_URL)
 
