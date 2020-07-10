@@ -24,6 +24,7 @@ import requests_async as requests
 #vk_api...
 from vk_api import VkApi
 from async_extend import AsyncVkApi, AsyncVkAudio
+
 #from vk_api.audio import VkAudio
 from audio import VkAudio
 
@@ -515,8 +516,6 @@ async def LPlistener(vk_audio, db):
     LONGPOLING_OFFSET = 0
     LONGPOLING_DELAY = 3
 
-    asyncio.create_task(vk_queue_demon(vk_audio, db))
-
     #offwebhook
     await setWebhook()
 
@@ -541,7 +540,7 @@ async def LPlistener(vk_audio, db):
         for result in r['result']:
             LONGPOLING_OFFSET = max(LONGPOLING_OFFSET,result['update_id'])+1
 
-            result_demon(vk_audio, db, result)
+            async result_demon(vk_audio, db, result)
 
 #start func
 def start_bot(WEB_HOOK_FLAG = True):
