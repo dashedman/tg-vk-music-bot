@@ -23,7 +23,7 @@ import requests_async as requests
 
 #vk_api...
 from vk_api import VkApi
-from vk_api.async_extend import AsyncVkApi, AsyncVkAudio
+from async_extend import AsyncVkApi, AsyncVkAudio
 #from vk_api.audio import VkAudio
 from audio import VkAudio
 

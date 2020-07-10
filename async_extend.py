@@ -16,13 +16,13 @@ from bs4 import BeautifulSoup
 
 
 import jconfig
-from .enums import VkUserPermissions
-from .exceptions import *
-from .utils import (
+from vk_api.enums import VkUserPermissions
+from vk_api.exceptions import *
+from vk_api.utils import (
     code_from_number, search_re, clear_string,
     cookies_to_list, set_cookies_from_list
 )
-from .audio_url_decoder import decode_audio_url
+from vk_api.audio_url_decoder import decode_audio_url
 
 
 
