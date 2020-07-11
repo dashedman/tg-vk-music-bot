@@ -155,7 +155,8 @@ async def sendKeyboard(chat_id, text, keyboard, replay_message_id = None):
     r = response.json()
 
     if not r['ok']:
-        raise Exception(f"bad Keyboard: {r}")
+        if r['error_code'] != 400:
+            raise Exception(f"bad Keyboard: {r}")
     return r['result']
 
 async def editKeyboard(chat_id, message_id, keyboard):
@@ -581,7 +582,7 @@ async def workerCallback(vk_audio, db, callback):
             #download audio
             response = await requests.head(new_audio['url'])
             audio_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
-            if track_size >= 50:
+            if audio_size >= 50:
                 await sendMessage(
                     callback['message']['chat']['id'],
                     "This audio file size is too large :c"
