@@ -731,7 +731,7 @@ class AsyncVkAudio(object):
             if not tracks:
                 break
 
-            for i in tracks:
+            async for i in tracks:
                 yield i
 
             if response['data'][0]['hasMore']:
@@ -781,7 +781,7 @@ class AsyncVkAudio(object):
             if not albums:
                 break
 
-            for i in albums:
+            async for i in albums:
                 yield i
 
             offset += ALBUMS_PER_USER_PAGE

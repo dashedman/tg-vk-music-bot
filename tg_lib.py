@@ -1,6 +1,7 @@
 import time
 import html
-
+import sqlite3
+import json
 
 def auth_handler():
     return input("Key code:"), False
@@ -19,7 +20,7 @@ def get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page=1):
     if current_page > 1:
         inline_keyboard[-1].append({
                                     'text': '◀️',
-                                    'callback_data': f'e@{current_page-1}@{request}'
+                                    'callback_data': f'e@{request}@{current_page-1}'
                                    })
     else:
         inline_keyboard[-1].append({
@@ -35,7 +36,7 @@ def get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page=1):
     if NEXT_PAGE_FLAG:
         inline_keyboard[-1].append({
                                     'text': '▶️',
-                                    'callback_data': f'e@{current_page+1}@{request}'
+                                    'callback_data': f'e@{request}@{current_page+1}'
                                    })
     else:
         inline_keyboard[-1].append({
@@ -44,7 +45,7 @@ def get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page=1):
                                    })
     inline_keyboard[-1].append({
                                 'text': '⤴️ Hide',
-                                'callback_data': f'h@{current_page}@{request}'
+                                'callback_data': f'h@{request}@{current_page}'
                                })
     return inline_keyboard
 
@@ -74,6 +75,91 @@ async def get_music_list(generator, current_page=1, list_length = 1):
 
     return musiclist, NEXT_PAGE_FLAG
 
+async def get_ad_generator(vk_audio, db, ad_id):
+
+    ad_json_list = get_ad(db, ad_id)
+    if ad_json_list:
+        ad_track_list = json.loads(ad_json_list[2])
+        for track in ad_track_list:
+            yield track
+
+def get_ad(db, ad_id=None):
+    if ad_id:
+        db.cursor.execute(
+            """SELECT id, caption, track_list, counter FROM ad_buffer
+            WHERE id=?"""
+            , (ad_id, ))
+    else:
+        db.cursor.execute(
+            """SELECT id, caption, track_list, counter FROM ad_buffer
+            ORDER BY RANDOM() LIMIT 1""")
+    return db.cursor.fetchone()
+
+def put_ad(db, ad_id, caption, track_list, counter=0):
+    if ad_id:
+        try:
+            db.cursor.execute(
+                """UPDATE ad_buffer
+                SET caption=?, track_list=?, counter=?
+                WHERE id=?"""
+                ,(caption, track_list, counter, ad_id))
+        except sqlite3.IntegrityError:
+            db.cursor.execute(
+                """INSERT INTO ad_buffer
+                VALUES (?,?,?,?)"""
+                , (ad_id, caption, track_list, counter))
+    else:
+        db.cursor.execute(
+            """INSERT INTO ad_buffer (caption, track_list, counter)
+            VALUES (?,?,?)"""
+            , ( caption, track_list, counter))
+    db.conn.commit()
+
+def increment_ad(db, ad_id, increment = None):
+    if increment:
+        db.cursor.execute(
+            """UPDATE ad_buffer
+            SET counter=?
+            WHERE id=?"""
+            ,(increment, ad_id))
+    else:
+        db.cursor.execute(
+            """SELECT counter FROM ad_buffer
+            WHERE id=?"""
+            , (ad_id, ))
+        increment = db.cursor.fetchone()[0] + 1
+        db.cursor.execute(
+            """UPDATE ad_buffer
+            SET counter=?
+            WHERE id=?"""
+            ,(increment, ad_id))
+
+def decrement_ad(db, ad_id, decrement = None):
+    if decrement:
+        db.cursor.execute(
+            """UPDATE ad_buffer
+            SET counter=?
+            WHERE id=?"""
+            ,(decrement, ad_id))
+    else:
+        db.cursor.execute(
+            """SELECT counter FROM ad_buffer
+            WHERE id=?"""
+            , (ad_id, ))
+        decrement = db.cursor.fetchone()[0] - 1
+        db.cursor.execute(
+            """UPDATE ad_buffer
+            SET counter=?
+            WHERE id=?"""
+            ,(decrement, ad_id))
+
+def delete_ad(db, ad_id):
+    db.cursor.execute(
+        """DELETE FROM ad_buffer WHERE id=?"""
+        ,(ad_id, ))
+    db.conn.commit()
+
+
 def db_get_audio(db, audio_id):
     db.cursor.execute(
         """SELECT telegram_id, audio_size FROM audios
@@ -82,36 +168,39 @@ def db_get_audio(db, audio_id):
     return db.cursor.fetchone()
 
 def db_put_audio(db, audio_id, telegram_id, audio_size):
-    db.cursor.execute(
-        """INSERT INTO audios
-        VALUES (?,?,?)"""
+    try:
+        db.cursor.execute(
+            """INSERT INTO audios
+            VALUES (?,?,?)"""
         , (audio_id, telegram_id, audio_size))
+    except sqlite3.IntegrityError:
+        pass
     db.conn.commit()
 
 def all_mode_check(db, chat_id):
     db.cursor.execute(
-        """SELECT mode FROM chat_modes
+        """SELECT mode FROM chats
         WHERE id=?"""
         , (chat_id, ))
     answer = db.cursor.fetchone()
     if answer == None:
         db.cursor.execute(
-            """INSERT INTO chat_modes
-            VALUES (?,?)"""
-            , (chat_id, False))
+            """INSERT INTO chats
+            VALUES (?,?,?)"""
+            , (chat_id, False, 25))
         answer = [False]
     return bool(answer[0])
 
 def all_mode_on(db, chat_id):
     try:
         db.cursor.execute(
-            """UPDATE chat_modes
+            """UPDATE chats
             SET mode=?
             WHERE id=?"""
             , (True, chat_id))
     except sqlite3.IntegrityError:
         db.cursor.execute(
-            """INSERT INTO chat_modes
+            """INSERT INTO chats
             VALUES (?,?)"""
             , (chat_id, True))
     db.conn.commit()
@@ -119,13 +208,41 @@ def all_mode_on(db, chat_id):
 def all_mode_off(db, chat_id):
     try:
         db.cursor.execute(
-            """UPDATE chat_modes
+            """UPDATE chats
             SET mode=?
             WHERE id=?"""
             , (False, chat_id))
     except sqlite3.IntegrityError:
         db.cursor.execute(
-            """INSERT INTO chat_modes
+            """INSERT INTO chats
             VALUES (?,?)"""
             , (chat_id, False))
+    db.conn.commit()
+
+def get_chat_counter(db, chat_id):
+    db.cursor.execute(
+        """SELECT ad_counter FROM chats
+        WHERE id=?"""
+        , (chat_id, ))
+    answer = db.cursor.fetchone()
+    if answer == None:
+        db.cursor.execute(
+            """INSERT INTO chats
+            VALUES (?,?,?)"""
+            , (chat_id, False, 25))
+        answer = [25]
+    return answer[0]
+
+def put_chat_counter(db, chat_id, count = 25):
+    try:
+        db.cursor.execute(
+            """UPDATE chats
+            SET ad_counter=?
+            WHERE id=?"""
+            , (count, chat_id))
+    except sqlite3.IntegrityError:
+        db.cursor.execute(
+            """INSERT INTO chats (id, ad_counter)
+            VALUES (?,?)"""
+            , (chat_id, count))
     db.conn.commit()

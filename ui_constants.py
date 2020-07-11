@@ -35,3 +35,18 @@ ABOUT_TEXT = """📔 About!
 📫 For any questions: @dashed_man
 
 py3.8"""
+
+WAITING_ANIM_LIST = "|\\-/"
+WAITING_ANIM_LIST2 = "+x"
+
+def waiting_animation():
+    index = -1
+    while True:
+        index = (index+1)%4
+        yield WAITING_ANIM_LIST[index]
+
+def waiting_animation2():
+    index = -1
+    while True:
+        index = (index+1)%2
+        yield WAITING_ANIM_LIST2[index]

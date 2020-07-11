@@ -7,6 +7,7 @@ import json
 import sys
 import os
 import html
+import ssl
 
 from pprint import pprint
 from collections import namedtuple, deque
@@ -18,11 +19,13 @@ from OpenSSL import crypto
 
 #import requests
 #asynchronious requests-like
+from h11._util import RemoteProtocolError
 from requests.exceptions import ConnectionError
 import requests_async as requests
 
 #vk_api...
 from vk_api import VkApi
+from vk_api.exceptions import AccessDenied
 from async_extend import AsyncVkApi, AsyncVkAudio
 
 #from vk_api.audio import VkAudio
@@ -55,12 +58,13 @@ with open("botdata.ini","r") as f:
     VK_LOGIN = f.readline()[:-1]
     VK_PASSWORD = f.readline()[:-1]
 
-PORT = os.environ.get('PORT')
+PORT = os.environ.get('PORT') or 88
 
 TG_URL = "https://api.telegram.org/bot"+ TG_TOKEN +"/"
 TG_SHELTER = -479340226
-WEBHOOK_URL = "https://"+ WEBHOOK_DOMEN +"/"+ TG_TOKEN +"/"
+WEBHOOK_URL = f"https://{WEBHOOK_DOMEN}/{TG_TOKEN}/"
 
+PKEY_FILE = "bot.pem"
 KEY_FILE = "bot.key"
 CERT_FILE = "bot.crt"
 CERT_DIR = "ssl_folder"
@@ -69,6 +73,8 @@ SELF_SSL = True
 MEGABYTE_SIZE = 1<<20
 MUSIC_LIST_LENGTH = 9
 IS_DOWNLOAD = set()
+CONNECT_COUNTER = 0
+AD_COOLDOWN = 25
 
 #functions
 
@@ -80,36 +86,39 @@ def create_self_signed_cert(cert_dir):
     #  Создание сертификата
     cert = crypto.X509()
     cert.get_subject().C = "RU"   #  указываем свои данные
-    cert.get_subject().L = "Moscow"   #  указываем свои данные
+    cert.get_subject().ST = "Saint-Petersburg"
+    cert.get_subject().L = "Saint-Petersburg"   #  указываем свои данные
     cert.get_subject().O = "musicforus"   #  указываем свои данные
     cert.get_subject().CN = WEBHOOK_DOMEN   #  указываем свои данные
-    cert.set_serial_number(1000)
+    cert.set_serial_number(1)
     cert.gmtime_adj_notBefore(0)
-    cert.gmtime_adj_notAfter(10*365*24*60*60)   #  срок "жизни" сертификата
+    cert.gmtime_adj_notAfter(365*24*60*60)   #  срок "жизни" сертификата
     cert.set_issuer(cert.get_subject())
     cert.set_pubkey(k)
-    cert.sign(k, 'sha1')
+    cert.sign(k, 'SHA256')
 
-    with open(os.path.join(cert_dir, CERT_FILE), "wb") as f:
-        f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
 
-    with open(os.path.join(cert_dir, KEY_FILE), "wb") as f:
-        f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, k))
+    with open(os.path.join(cert_dir, CERT_FILE), "w") as f:
+        f.write(crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode("ascii"))
 
-    return crypto.dump_publickey(crypto.FILETYPE_PEM, k)
+    with open(os.path.join(cert_dir, KEY_FILE), "w") as f:
+        f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, k).decode("ascii"))
+
+    return crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode("ascii")
 
 #tg send functions
 async def setWebhook(url='', certificate=None):
     await requests.post(
         TG_URL + 'setWebhook',
-        json = {'url':url},
+        data = {'url':url},
         files = {'certificate':certificate} if certificate else None,
-        timeout=None)
+        timeout=None
+    )
 
 async def getWebhookInfo():
     return await requests.post(TG_URL + 'getWebhookInfo', timeout=None)
 
-async def sendMessage(chat_id, text, replay_message_id = None):
+async def sendMessage(chat_id, text, replay_message_id = None, **kwargs):
     data = {
         'chat_id':chat_id,
         'text': text
@@ -118,12 +127,13 @@ async def sendMessage(chat_id, text, replay_message_id = None):
     if replay_message_id:
         data['reply_to_message_id'] = replay_message_id
 
+    data.update(kwargs)
+
     response = await requests.post(TG_URL + 'sendMessage', json = data, timeout=None)
     r = response.json()
 
     if not r['ok']:
-        pprint(r)
-        raise("no ok")
+        raise Exception(f"bad Message: {r}")
     return r['result']
 
 async def sendKeyboard(chat_id, text, keyboard, replay_message_id = None):
@@ -145,9 +155,7 @@ async def sendKeyboard(chat_id, text, keyboard, replay_message_id = None):
     r = response.json()
 
     if not r['ok']:
-        pprint(r)
-        pprint(data)
-        raise("no ok")
+        raise Exception(f"bad Keyboard: {r}")
     return r['result']
 
 async def editKeyboard(chat_id, message_id, keyboard):
@@ -161,9 +169,8 @@ async def editKeyboard(chat_id, message_id, keyboard):
     r = response.json()
 
     if not r['ok']:
-        pprint(r)
-        pprint(data)
-        raise("no ok")
+        if r['error_code'] != 400:
+            raise Exception(f"bad Keyboard edit: {r}")
     return r['result']
 
 async def sendAudio(chat_id, file = None, url = None, telegram_id = None, **kwargs):
@@ -184,17 +191,31 @@ async def sendAudio(chat_id, file = None, url = None, telegram_id = None, **kwar
             'audio': telegram_id
         }
     else:
-        raise("Bad audio path!")
+        raise Exception("Bad audio path!")
 
     data.update(kwargs)
     response = await requests.post(TG_URL + 'sendAudio', data = data, files = files, timeout=None)
     r = response.json()
     if not r['ok']:
-        pprint(r)
-        raise("no ok")
+        raise Exception(f"bad Audio: {r}")
     return r['result']
 
 #msg demon-worker functions
+async def send_error(result, err):
+    print(f"[{time.ctime()}] Поймал чипалах :с\nСоединений: {CONNECT_COUNTER}")
+    wa = waiting_animation2()
+    while True:
+        print(f"\r[{time.ctime()}] Пробую уведомить об ошибке... {next(wa)}", end="")
+        try:
+            await sendMessage(TG_SHELTER, f"Поймал чипалах :с\nСоединений: {CONNECT_COUNTER}\nError: {repr(err)}")
+        except Exception:
+            await asyncio.sleep(60)
+        else:
+            break
+    print()
+    pprint(result)
+    raise(err)
+
 async def seek_and_send(vk_audio, db, msg, request = None):
     if not request: request = msg['text']
     #seek music in vk
@@ -271,39 +292,44 @@ async def send_new_songs(vk_audio, db, msg):
 async def command_demon(vk_audio, db, msg, command = None):
     if not command: command = msg['text'][1:]
 
-    space_id = command.find(' ')
-    if space_id == -1:
-        command = command.lower().replace('@musicforus_bot','')
-    else:
-        command = command[:space_id].lower().replace('@musicforus_bot','')+command[space_id:]
+    mail_id = command.find('@')
+    if mail_id > -1 and command.find(' ') > mail_id:
+        command = command[:mail_id+14].lower().replace('@musicforus_bot','')+command[mail_id+14:]
 
-    print(f'Command: /{command}')
+    print(f'[{time.ctime()}] Command: /{command}')
 
     if command == 'start':
-        await sendKeyboard(msg['chat']['id'], \
+        if 'username' in msg['from']:
+            await sendKeyboard(msg['chat']['id'], \
                             f"Keyboard for @{msg['from']['username']}",
                             {'keyboard': MAIN_KEYBOARD,
                              'resize_keyboard': True,
                              'one_time_keyboard': True,
                              'selective': True})
-    if command[:2] == 'f ':
+        else:
+            await sendKeyboard(msg['chat']['id'], \
+                            f"Hi!",
+                            {'keyboard': MAIN_KEYBOARD,
+                             'resize_keyboard': True,
+                             'one_time_keyboard': True})
+    elif command[:2] == 'f ':
         await seek_and_send(vk_audio, db, msg, command[2:])
-    if command[:5] == 'find ':
+    elif command[:5] == 'find ':
         await seek_and_send(vk_audio, db, msg, command[5:])
-    if command == 'popular' or command == 'chart':
+    elif command == 'popular' or command == 'chart':
         await send_popular(vk_audio, db, msg)
-    if command == 'new_songs':
+    elif command == 'new_songs':
         await send_new_songs(vk_audio, db, msg)
-    if command == 'help':
+    elif command == 'help':
         await sendMessage(msg['chat']['id'], \
                             HELP_TEXT)
-    if command == 'quick':
+    elif command == 'quick':
         await sendMessage(msg['chat']['id'], \
                             QUICK_TEXT)
-    if command == 'about':
+    elif command == 'about':
         await sendMessage(msg['chat']['id'], \
                             ABOUT_TEXT)
-    if command == 'settings':
+    elif command == 'settings':
         tmp_settings_keyboard = deepcopy(SETTINGS_KEYBOARD)
         tmp_settings_keyboard.append([{'text':'🙈 Listen only to commands'
                                                if tg_lib.all_mode_check(db, msg['chat']['id'])
@@ -315,7 +341,7 @@ async def command_demon(vk_audio, db, msg, command = None):
                              'resize_keyboard': True,
                              'selective':True })
 
-    if command == 'all_mode_on':
+    elif command == 'all_mode_on':
         tg_lib.all_mode_on(db, msg['chat']['id'])
         tmp_settings_keyboard = deepcopy(SETTINGS_KEYBOARD)
         tmp_settings_keyboard.append([{'text':'🙈 Listen only to commands'
@@ -327,7 +353,7 @@ async def command_demon(vk_audio, db, msg, command = None):
                             {'keyboard': tmp_settings_keyboard,
                              'resize_keyboard': True,
                              'selective':True })
-    if command == 'all_mode_off':
+    elif command == 'all_mode_off':
         tg_lib.all_mode_off(db, msg['chat']['id'])
         tmp_settings_keyboard = deepcopy(SETTINGS_KEYBOARD)
         tmp_settings_keyboard.append([{'text':'🙈 Listen only to commands'
@@ -339,6 +365,170 @@ async def command_demon(vk_audio, db, msg, command = None):
                             {'keyboard': tmp_settings_keyboard,
                              'resize_keyboard': True,
                              'selective':True })
+
+    elif command == 'advertisement':
+        ad = tg_lib.get_ad(db)
+
+        if not ad:
+            await sendMessage(
+                msg['chat']['id'],
+                "Актуальной рекламы нет"
+            )
+            return
+        ad_id, ad_text, ad_json_list, ad_counter = ad
+
+        inline_keyboard = [[{
+                             'text':'⤵️ Show',
+                             'callback_data': f'e@!ad@{ad_id}'
+                            }]]
+
+        await sendMessage(
+            msg['chat']['id'],
+            f"Для Рекламы №{ad_id} Осталось {ad_counter-1} размещений"
+        )
+        await sendMessage(
+            msg['chat']['id'],
+            ad_text,
+            disable_web_page_preview=True,
+            parse_mode='markdownv2',
+            reply_markup={'inline_keyboard': inline_keyboard},
+            reply_to_message_id = msg['message_id']
+        )
+        if ad_counter > 1:
+            tg_lib.decrement_ad(db, ad_id, ad_counter-1)
+        else:
+            tg_lib.delete_ad(db, ad_id)
+
+    elif command[:5] == "addad":
+        data = command[6:].split("\n")
+
+        #get data about ad
+        counter = int(data[0])
+        album_url = data[1]
+        caption = '\n'.join(data[2:])
+
+        #get playlist ids
+        matches = re.search(r"z=audio_playlist(.*?)_(.*)(&|%)?", album_url)
+        owner_id = matches.group(1)
+        album_id = matches.group(2)
+        matches = re.search(r"%2F(.*)&?", album_url)
+        access_hash = None
+        if matches: access_hash = matches.group(1)
+
+        #get three or less track from album
+        try:
+            generator = vk_audio.get_iter(owner_id = owner_id, album_id = album_id, access_hash = access_hash)
+            tracklist, NPF = await tg_lib.get_music_list(generator, list_length = 3)
+        except AccessDenied:
+            response = await sendMessage(
+                msg['chat']['id'],
+                f"Album access denied for {owner_id}_{album_id} AH: {access_hash}"
+            )
+            return
+
+        print(f"[{time.ctime()}] Loading audios for ad")
+        for track in tracklist:
+            audio_id = f"{track['owner_id']}_{track['id']}"
+            #check audio in old loads
+            if audio_data := tg_lib.db_get_audio(db, audio_id):
+                continue
+
+            #download audio
+            response = await requests.head(track['url'])
+            track_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
+            if track_size >= 50:
+                print(f"[{time.ctime()}] {track['artist']}-{track['title']} to big: {track_size} MB")
+                track = None
+                continue
+            response = await requests.get(track['url'])
+
+            print(f"[{time.ctime()}] Ready Track: {track['artist']}-{track['title']} {track_size} MB")
+            #send new audio file
+            response = await sendAudio(
+                msg['chat']['id'],
+                file = response.content,
+                title = track['title'],
+                performer = track['artist'],
+                caption=f'{track_size:.2f} MB f\n_via MusicForUs\_bot_'.replace('.','\.'),
+                parse_mode='markdownv2'
+            )
+
+            #save new audio in db
+            tg_lib.db_put_audio(
+                db,
+                audio_id,
+                response['audio']['file_id'],
+                track_size
+            )
+
+        #save ad
+        while True:
+            try:
+                tracklist.remove(None)
+            except ValueError:
+                break
+
+        tg_lib.put_ad(
+            db, None, caption,
+            json.dumps(tracklist), counter
+        )
+
+        #show new ad
+        db.cursor.execute(
+            """SELECT id FROM ad_buffer
+            WHERE track_list=?"""
+            , (json.dumps(tracklist), ))
+        ad_id = db.cursor.fetchone()[0]
+        inline_keyboard = [[{
+            'text':'⤵️ Show',
+            'callback_data': f'e@!ad@{ad_id}'
+        }]]
+        try:
+            await sendMessage(
+                msg['chat']['id'],
+                caption,
+                parse_mode = 'markdownv2',
+                disable_web_page_preview=True,
+                reply_markup = {'inline_keyboard': inline_keyboard},
+                reply_to_message_id = msg['message_id']
+            )
+        except Exception as err:
+            await sendMessage(
+                msg['chat']['id'],
+                "Ошибка"+repr(err)
+            )
+
+async def check_advertisement(db, msg):
+
+    count = tg_lib.get_chat_counter(db, msg['chat']['id'])
+    if count <= 1:
+        count = AD_COOLDOWN
+
+        ad = tg_lib.get_ad(db)
+        if not ad: return
+        ad_id, ad_text, ad_json_list, ad_counter = ad
+
+        inline_keyboard = [[{
+                             'text':'⤵️ Show',
+                             'callback_data': f'e@!ad@{ad_id}'
+                            }]]
+
+        await sendMessage(
+            msg['chat']['id'],
+            ad_text,
+            disable_web_page_preview=True,
+            parse_mode='markdownv2',
+            reply_markup={'inline_keyboard': inline_keyboard},
+            reply_to_message_id = msg['message_id']
+        )
+        if ad_counter > 1:
+            tg_lib.decrement_ad(db, ad_id, ad_counter-1)
+        else:
+            tg_lib.delete_ad(db, ad_id)
+    else:
+        count -= 1
+
+    tg_lib.put_chat_counter(db, msg['chat']['id'], count)
 
 
 #asynchronious workers
@@ -355,8 +545,7 @@ async def workerMsg(vk_audio, db, msg):
             if tg_lib.all_mode_check(db, msg['chat']['id']):
                 print(f"[{time.ctime()}] Message: {msg['text']}")
                 await seek_and_send(vk_audio, db, msg)
-    else:
-        pprint(msg)
+
 
 async def workerCallback(vk_audio, db, callback):
     data = callback['data'].split('@')
@@ -365,6 +554,8 @@ async def workerCallback(vk_audio, db, callback):
 
     if command == 'd' :
         audio_id = data[0]+'_'+data[1]
+
+        asyncio.create_task(check_advertisement(db, callback['message']))
 
         while audio_id in IS_DOWNLOAD:
             await asyncio.sleep(0.07)
@@ -376,7 +567,6 @@ async def workerCallback(vk_audio, db, callback):
                             telegram_id = telegram_id,
                             caption=f'{audio_size:.2f} MB t\n_via MusicForUs\_bot_'.replace('.','\.'),
                             parse_mode='markdownv2')
-
         else:
             IS_DOWNLOAD.add(audio_id)
 
@@ -384,13 +574,30 @@ async def workerCallback(vk_audio, db, callback):
                 try:
                     new_audio = await vk_audio.get_audio_by_id(*data)
                 except ConnectionError:
-                    asyncio.sleep(1)
+                    await asyncio.sleep(1)
                 else:
                     break
 
             #download audio
-            response = await requests.get(new_audio['url'])
+            response = await requests.head(new_audio['url'])
             audio_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
+            if track_size >= 50:
+                await sendMessage(
+                    callback['message']['chat']['id'],
+                    "This audio file size is too large :c"
+                )
+                IS_DOWNLOAD.discard(audio_id)
+                return
+
+            while True:
+                try:
+                    response = await requests.get(new_audio['url'])
+                except RemoteProtocolError:
+                    await asyncio.sleep(0)
+                else:
+                    break
+
+
             #send new audio file
             response = await sendAudio(callback['message']['chat']['id'],
                                         file = response.content,
@@ -398,12 +605,9 @@ async def workerCallback(vk_audio, db, callback):
                                         performer = new_audio['artist'],
                                         caption='{:.2f} MB f\n_via MusicForUs\_bot_'.format(audio_size).replace('.','\.'),
                                         parse_mode='markdownv2')
-            del new_audio
 
             #multiline comment
             '''
-            response = await requests.head(new_audio['url'], allow_redirects=True)
-            audio_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
             response = await sendAudio(callback['message']['chat']['id'],
                                         url = new_audio['url'],
                                         #mime_type = 'audio/mp3',
@@ -421,12 +625,15 @@ async def workerCallback(vk_audio, db, callback):
             IS_DOWNLOAD.discard(audio_id)
 
     if command == 'e':
-        current_page = int(data[0])
-        request = data[1]
+
+        request = data[0]
+        current_page = int(data[1])# or ad_id for ad
 
         while True:
             try:
-                if request == "!popular":
+                if request == "!ad":
+                    res_generator = tg_lib.get_ad_generator(vk_audio, db, current_page)#this is ad_id
+                elif request == "!popular":
                     res_generator = vk_audio.get_popular_iter(offset=(current_page-1)*MUSIC_LIST_LENGTH )
                 elif request == "!new_songs":
                     res_generator = vk_audio.get_news_iter(offset=(current_page-1)*MUSIC_LIST_LENGTH )
@@ -440,7 +647,27 @@ async def workerCallback(vk_audio, db, callback):
                 break
 
         #construct inline keyboard for list
-        inline_keyboard = tg_lib.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
+        if request != "!ad":
+            inline_keyboard = tg_lib.get_inline_keyboard( musiclist, request, NEXT_PAGE_FLAG, current_page)
+        else:
+            inline_keyboard = []
+            if musiclist:
+                for music in musiclist:
+                    #print(music)
+                    duration = time.gmtime(music['duration'])
+                    inline_keyboard.append([{
+                        'text': html.unescape(f"{music['artist']} - {music['title']} ({duration.tm_min}:{duration.tm_sec:02})".replace("$#","&#")),
+                        'callback_data':f"d@{music['owner_id']}@{music['id']}"
+                    }])
+                inline_keyboard.append([{
+                    'text': '⤴️ Hide',
+                    'callback_data': f'h@{request}@{current_page}'#this is ad_id
+                }])
+            else:
+                inline_keyboard.append([{
+                    'text': '♻️ Ad is gone',
+                    'callback_data': f'pass@'#this is ad_id
+                }])
 
         #send answer
         await editKeyboard(callback['message']['chat']['id'], \
@@ -448,11 +675,12 @@ async def workerCallback(vk_audio, db, callback):
                             {'inline_keyboard':inline_keyboard})
 
     if command == 'h':
-        current_page = int(data[0])
-        request = data[1]
+        request = data[0]
+        current_page = int(data[1])#or ad_id if request == '!ad'
+
         inline_keyboard = [[{
                              'text':'⤵️ Show',
-                             'callback_data': f'e@{current_page}@{request}'
+                             'callback_data': f'e@{request}@{current_page}'
                             }]]
         await editKeyboard(callback['message']['chat']['id'], \
                             callback['message']['message_id'], \
@@ -462,41 +690,56 @@ async def workerCallback(vk_audio, db, callback):
         pass
 
 
-#demons
+#demon
 async def result_demon(vk_audio, db, result):
-    #just message
-    if 'message' in result:
-        await workerMsg(vk_audio, db, result['message'])
-    #callback
-    elif 'callback_query' in result:
-        await workerCallback(vk_audio, db, result['callback_query'])
-    elif 'edited_message' in result:
-        pass
-    #unknow update
-    else:
-        pprint(result)
+    global CONNECT_COUNTER
+    CONNECT_COUNTER += 1
+    try:
+        #just message
+        if 'message' in result:
+            await workerMsg(vk_audio, db, result['message'])
+        #callback
+        elif 'callback_query' in result:
+            await workerCallback(vk_audio, db, result['callback_query'])
+        elif 'edited_message' in result:
+            pass
+
+    except Exception as err:
+        asyncio.create_task(send_error(result,err))
+    finally:
+        CONNECT_COUNTER -= 1
     return
 
 
 
 #listeners
-#~~flask~~ vibora, requests
+#~~flask~~ ~~vibora~~ sanic, requests
 async def WHlistener(vk_audio, db):
     #asyncio.get_event_loop().set_debug(True)
 
+    print(f"[{time.ctime()}] Set Webhook...")
     if SELF_SSL:
         #create ssl for webhook
-        public_key = create_self_signed_cert(CERT_DIR)
-        await setWebhook(WEBHOOK_URL, certificate = public_key)
+        create_self_signed_cert(CERT_DIR)
+        with open(os.path.join(CERT_DIR, CERT_FILE), "rb") as f:
+            await setWebhook(WEBHOOK_URL, certificate = f)
+
+        context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
+        context.load_cert_chain(
+            os.path.join(CERT_DIR, CERT_FILE),
+            keyfile=os.path.join(CERT_DIR, KEY_FILE)
+        )
+
     else:
         await setWebhook(WEBHOOK_URL)
 
     response = await getWebhookInfo()
+    pprint(response.json())
     if response.json()['result']['url'] != WEBHOOK_URL:
         print(f"[{time.ctime()}] WebHook wasn't setted!")
-        pprint(response.json())
         print(f"[{time.ctime()}] Shut down...")
         return
+
 
 
     app_listener = Sanic(__name__)
@@ -508,7 +751,13 @@ async def WHlistener(vk_audio, db):
         return sanic_json({"ok": True})
 
     print(f"[{time.ctime()}] Listening...")
-    server = app_listener.create_server(host = HOST_IP, port = PORT, return_asyncio_server=True, access_log = False)
+    server = app_listener.create_server(
+        host = HOST_IP,
+        port = PORT,
+        return_asyncio_server=True,
+        access_log = False,
+        ssl = context if SELF_SSL else None
+    )
     asyncio.create_task(server)
 
 
@@ -541,32 +790,24 @@ async def LPlistener(vk_audio, db):
         for result in r['result']:
             LONGPOLING_OFFSET = max(LONGPOLING_OFFSET,result['update_id'])+1
 
-            await result_demon(vk_audio, db, result)
+            asyncio.create_task(result_demon(vk_audio, db, result))
 
 #start func
 def start_bot(WEB_HOOK_FLAG = True):
     print(f"[{time.ctime()}] Start...")
     #print important constants
-    print("""
-            TG_TOKEN: {}
-            VK_LOGIN: {}
-            VK_PASSWORD: {}
-            TG_URL: {}
-            TG_SHELTER: {}
-            WEB HOOK: {}
-            WEBHOOK_DOMEN: {}
-            WEBHOOK_URL: {}
-            HOST_IP: {}
-            PORT: {}""".format(TG_TOKEN,
-            VK_LOGIN,
-            VK_PASSWORD,
-            TG_URL,
-            TG_SHELTER,
-            WEB_HOOK_FLAG,
-            WEBHOOK_DOMEN,
-            WEBHOOK_URL,
-            HOST_IP,
-            PORT))
+    print(f"""
+            {TG_TOKEN=}
+            {VK_LOGIN=}
+            {VK_PASSWORD=}
+            {TG_URL=}
+            {TG_SHELTER=}
+            {WEB_HOOK_FLAG=}
+            {WEBHOOK_DOMEN=}
+            {WEBHOOK_URL=}
+            {SELF_SSL=}
+            {HOST_IP=}
+            {PORT=}""")
 
     try:
         #database loading
@@ -576,24 +817,33 @@ def start_bot(WEB_HOOK_FLAG = True):
 
         db = namedtuple('Database', 'conn cursor')(conn = db_connect, cursor = db_cursor)
         #if new database
-        try:
-            #audios table
-            db_cursor.execute(
-                """CREATE TABLE audios
-                (id TEXT PRIMARY KEY,
-                telegram_id TEXT NOT NULL,
-                audio_size FLOAT NOT NULL)""")
-        except sqlite3.OperationalError:
-            pass
 
-        try:
-            #all_mode table
-            db_cursor.execute(
-                """CREATE TABLE chat_modes
-                (id TEXT PRIMARY KEY,
-                mode BOOL NOT NULL)""")
-        except sqlite3.OperationalError:
-            pass
+        #audios table
+        db_cursor.execute(
+            """CREATE TABLE IF NOT EXISTS audios
+            (id TEXT PRIMARY KEY,
+            telegram_id TEXT NOT NULL,
+            audio_size FLOAT NOT NULL)""")
+
+        #all_mode table
+        db_cursor.execute(
+            """CREATE TABLE IF NOT EXISTS chats
+            (id TEXT PRIMARY KEY,
+            mode BOOL NOT NULL,
+            ad_counter INT NOT NULL DEFAULT 25)""")
+
+        #adwertisiment table
+        db_cursor.execute(
+            """CREATE TABLE IF NOT EXISTS ad_buffer
+            (id INTEGER PRIMARY KEY AUTOINCREMENT,
+            caption TEXT NOT NULL,
+            track_list TEXT NOT NULL,
+            counter INT NOT NULL)""")
+
+        db_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        print("TABLES:")
+        for table in db_cursor.fetchall():
+            print("\t",table)
 
         loop = asyncio.get_event_loop()
         #autetifications in vk
@@ -610,19 +860,22 @@ def start_bot(WEB_HOOK_FLAG = True):
 
     except (KeyboardInterrupt, ):
         #Force exit with ctrl+C
+        db_connect.close()
         loop.close()
         print(f"[{time.ctime()}] Key force exit.")
     except Exception as err:
         #Any error should send ping message to developer
         print(f"[{time.ctime()}] я упал :с")
         while True:
-            print(f"[{time.ctime()}] Пробую уведомить о падении...")
+            print(f"[{time.ctime()}] Пробую уведомить о падении...\r")
             try:
                 asyncio.run(sendMessage(TG_SHELTER, "я упал :с"))
             except Exception:
                 time.sleep(60)
             else:
                 break
+
+        db_connect.close()
         loop.close()
         raise(err)
 
@@ -641,8 +894,9 @@ if __name__ == "__main__":
     if args.ip: HOST_IP = args.ip
     if args.domen:
         WEBHOOK_DOMEN = args.domen
-        WEBHOOK_URL = "https://"+ WEBHOOK_DOMEN +"/"+ TG_TOKEN +"/"
+        WEBHOOK_URL = f"https://{WEBHOOK_DOMEN}/{TG_TOKEN}/"
     if args.ssl != None:
         SELF_SSL = bool(args.ssl)
+
     #if main then start bot
     start_bot(bool(args.webhook_on))
