@@ -1214,3 +1214,59 @@ def scrap_albums(html):
         })
 
     return albums
+
+
+class PolyVkAudio():
+    def __init__(self,login=None, password=None, token=None,
+                 auth_handler=None, captcha_handler=None,
+                 config=jconfig.Config, config_filename='vk_config.v2.json',
+                 api_version='5.92', app_id=6222115, scope=DEFAULT_USER_SCOPE,
+                 client_secret=None, session=None, loop = None,
+                 convert_m3u8_links=True,
+                 workers = 1):
+
+        self.wid = -1
+        self.workers_number = workers
+        self.workers = [None] * self.workers_number
+
+        for i in range(sessions_amount):
+            vk_session = AsyncVkApi(login, password, token,
+                         auth_handler, captcha_handler,
+                         config, config_filename,
+                         api_version, app_id, scope,
+                         client_secret, session, loop)
+            vk_session.auth()
+
+            self.workers[i] = AsyncVkAudio(vk_session, convert_m3u8_links)
+
+    async def get_iter(self, owner_id=None, album_id=None, access_hash=None):
+        sefl.wid = (self.wid + 1) % self.workers_number
+        await self.workers[self.wid].get_iter(owner_id, album_id, access_hash)
+
+
+
+if __name__ == "__main__":
+    #just auth
+    pvk_audio = PolyVkAudio("login","password", workers = 5)
+
+    async def test(pvk_audio, bench=1):
+        print(f"Start {time.clock()}")
+
+        task_closed = 0
+        async def task():
+            nonlocal task_closed, pvk_audio
+
+            await pvk_audio.get_iter()
+
+            task_closed += 1
+
+        for i in range(bench):
+            asyncio.create_task(task())
+
+        while task_closed<bench:
+            await asyncio.sleep(0)
+
+        print(f"End {time.clock()}")
+
+
+    asyncio.run(test(pvk_audio))

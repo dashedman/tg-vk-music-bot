@@ -2,7 +2,7 @@ MAIN_KEYBOARD = [[{'text':'🏃 Go!'}],
                  [{'text':'👑 Popular'},{'text':'🆕 New songs'}],
                  [{'text':'❓ Help'},{'text':'🔨 Settings'},{'text':'📔 About'}]]
 
-SETTINGS_KEYBOARD = [[{'text':'↩️ Back ↩️'}]]
+SETTINGS_KEYBOARD = [[{'text':'↩️ Back'}]]
 
 KEYBOARD_COMMANDS = { '🏃 Go!':'quick',
                       '👑 Popular':'popular',
@@ -12,7 +12,7 @@ KEYBOARD_COMMANDS = { '🏃 Go!':'quick',
                       '📔 About':'about',
                       '🐵 Listen to all message':'all_mode_on',
                       '🙈 Listen only to commands':'all_mode_off',
-                      '↩️ Back ↩️':'start'}
+                      '↩️ Back':'start'}
 
 
 HELP_TEXT = """❓ Help

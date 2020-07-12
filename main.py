@@ -644,9 +644,10 @@ async def workerCallback(vk_audio, db, callback):
             response = await requests.head(new_audio['url'])
             audio_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
             if audio_size >= 50:
+                duration = time.gmtime(new_audio['duration'])
                 await sendMessage(
                     callback['message']['chat']['id'],
-                    "This audio file size is too large :c"
+                    html.unescape(f"{new_audio['artist']} - {new_audio['title']} ({duration.tm_min}:{duration.tm_sec:02})\nThis audio file size is too large :c".replace("$#","&#")
                 )
                 IS_DOWNLOAD.discard(audio_id)
                 return
@@ -930,11 +931,6 @@ def start_bot(WEB_HOOK_FLAG = True):
         loop.create_task((WHlistener if WEB_HOOK_FLAG else LPlistener)(vk_audio, db))
         loop.run_forever()
 
-    except (KeyboardInterrupt, ):
-        #Force exit with ctrl+C
-        db_connect.close()
-        loop.close()
-        BOTLOG.info(f"Key force exit.")
     except Exception as err:
         #Any error should send ping message to developer
         BOTLOG.info(f"я упал :с")
@@ -950,6 +946,11 @@ def start_bot(WEB_HOOK_FLAG = True):
         loop.close()
         BOTLOG.exception(err)
         raise(err)
+    except BaseException as err:
+        #Force exit with ctrl+C
+        db_connect.close()
+        loop.close()
+        BOTLOG.info(f"Force exit. {err}")
 
 if __name__ == "__main__":
     #parse args
