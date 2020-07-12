@@ -647,7 +647,7 @@ async def workerCallback(vk_audio, db, callback):
                 duration = time.gmtime(new_audio['duration'])
                 await sendMessage(
                     callback['message']['chat']['id'],
-                    html.unescape(f"{new_audio['artist']} - {new_audio['title']} ({duration.tm_min}:{duration.tm_sec:02})\nThis audio file size is too large :c".replace("$#","&#")
+                    html.unescape(f"{new_audio['artist']} - {new_audio['title']} ({duration.tm_min}:{duration.tm_sec:02})\nThis audio file size is too large :c".replace("$#","&#"))
                 )
                 IS_DOWNLOAD.discard(audio_id)
                 return
