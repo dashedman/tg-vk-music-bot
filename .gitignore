@@ -4,3 +4,5 @@
 *.key
 *.pem
 *.log
+__pycache__/
+*.json
