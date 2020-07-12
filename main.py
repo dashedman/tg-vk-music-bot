@@ -539,7 +539,7 @@ async def command_demon(vk_audio, db, msg, command = None):
             db.cursor.execute("""SELECT * FROM ad_buffer""")
             str_list=""
             for ad in db.cursor.fetchall():
-                str_list += f"№{ad[0]} [{ad[3]}]: {ad[1]:<20} \n"
+                str_list += f"№{ad[0]} [{ad[3]}]: {ad[1][:40]}\n"
             await sendMessage(
                 msg['chat']['id'],
                 f"Ads:\n"+str_list,
