@@ -462,18 +462,18 @@ async def command_demon(vk_audio, db, msg, command = None):
                 response = await requests.head(track['url'])
                 track_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
                 if track_size >= 50:
-                    BOTLOG.info(f"{track['artist']}-{track['title']} to big: {track_size} MB")
+                    BOTLOG.info(html.unescape(f"{track['artist']}-{track['title']} to big: {track_size} MB"))
                     track = None
                     continue
                 response = await requests.get(track['url'])
 
-                BOTLOG.info(f"Ready Track: {track['artist']}-{track['title']} {track_size} MB")
+                BOTLOG.info(html.unescape(f"Ready Track: {track['artist']}-{track['title']} {track_size} MB"))
                 #send new audio file
                 response = await sendAudio(
                     msg['chat']['id'],
                     file = response.content,
-                    title = track['title'],
-                    performer = track['artist'],
+                    title = html.unescape(track['title']),
+                    performer = html.unescape(track['artist']),
                     caption=f'{track_size:.2f} MB f\n_via MusicForUs\_bot_'.replace('.','\.'),
                     parse_mode='markdownv2'
                 )
@@ -664,9 +664,9 @@ async def workerCallback(vk_audio, db, callback):
             #send new audio file
             response = await sendAudio(callback['message']['chat']['id'],
                                         file = response.content,
-                                        title = new_audio['title'],
-                                        performer = new_audio['artist'],
-                                        caption='{:.2f} MB f\n_via MusicForUs\_bot_'.format(audio_size).replace('.','\.'),
+                                        title = html.unescape(new_audio['title']),
+                                        performer = html.unescape(new_audio['artist']),
+                                        caption=f'{audio_size:.2f} MB f\n_via MusicForUs\_bot_'.replace('.','\.'),
                                         parse_mode='markdownv2')
 
             #multiline comment
