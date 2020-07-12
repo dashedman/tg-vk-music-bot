@@ -2,6 +2,21 @@ import time
 import html
 import sqlite3
 import json
+import asyncio
+
+class DictionaryBomb():
+    def __init__(self, dict, key, timer=0):
+        self.timer = timer
+        self.dict = dict
+        self.key = key
+    def replant(self, timer):
+        self.timer = timer
+    async def plant(self):
+        while self.timer >= time.time():
+            await asyncio.sleep(0)
+        print("cache deleted")
+        self.dict.pop(self.key, None)
+
 
 def auth_handler():
     return input("Key code:"), False
@@ -9,7 +24,6 @@ def auth_handler():
 def get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page=1):
     inline_keyboard = []
     for music in musiclist:
-        #print(music)
         duration = time.gmtime(music['duration'])
         inline_keyboard.append([{
                                     'text': html.unescape(f"{music['artist']} - {music['title']} ({duration.tm_min}:{duration.tm_sec:02})".replace("$#","&#")),
@@ -74,6 +88,37 @@ async def get_music_list(generator, current_page=1, list_length = 1):
                 pass
 
     return musiclist, NEXT_PAGE_FLAG
+
+def get_from_cash(MUSICLIST_CACHE, request, current_page):
+    MUSICLIST_CACHE[request][0].replant(time.time()+60*5)
+    return MUSICLIST_CACHE[request][1][(current_page-1)*9:current_page*9]
+
+async def caching_list(vk_audio, MUSICLIST_CACHE, request):
+    if request in MUSICLIST_CACHE: return
+    #bomb on 5 minutes
+    bomb = DictionaryBomb(MUSICLIST_CACHE, request, time.time()+60*5)
+
+    if request == "!popular":
+        generator = vk_audio.get_popular_iter()
+    elif request == "!new_songs":
+        generator = vk_audio.get_news_iter()
+    else:
+        generator = vk_audio.search_iter(request)
+
+    musiclist = []
+    MUSICLIST_CACHE[request] = (bomb, musiclist)
+
+    musiclist.append(await generator.__anext__())
+    for i in range(98):
+        try:
+            next_track = await generator.__anext__()
+            if next_track == musiclist[0]:break
+            musiclist.append(next_track)
+        except StopAsyncIteration:
+            break
+
+    asyncio.create_task(bomb.plant())
+
 
 async def get_ad_generator(vk_audio, db, ad_id):
 
