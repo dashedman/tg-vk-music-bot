@@ -8,6 +8,7 @@ import sys
 import os
 import html
 import ssl
+import logging
 
 from pprint import pprint
 from collections import namedtuple, deque
@@ -51,6 +52,16 @@ my_vk_password
 
 """
 #constants
+file_log = logging.FileHandler("botlogs.log")
+console_out = logging.StreamHandler()
+
+logging.basicConfig(
+    handlers=(file_log, console_out),
+    format='[%(asctime)s] %(message)s',
+    datefmt='%a %b %d %H:%M:%S %Y',
+    level=logging.INFO)
+BOTLOG = logging.getLogger("bot")
+
 with open("botdata.ini","r") as f:
     TG_TOKEN = f.readline()[:-1]
     WEBHOOK_DOMEN = f.readline()[:-1]
@@ -207,22 +218,25 @@ async def sendAudio(chat_id, file = None, url = None, telegram_id = None, **kwar
 
 #msg demon-worker functions
 async def send_error(result, err):
-    print(f"[{time.ctime()}] Поймал чипалах :с\nСоединений: {CONNECT_COUNTER}")
-    wa = waiting_animation2()
+    BOTLOG.info(f"Поймал чипалах :с\nСоединений: {CONNECT_COUNTER}")
     while True:
-        print(f"\r[{time.ctime()}] Пробую уведомить об ошибке... {next(wa)}", end="")
         try:
             await sendMessage(TG_SHELTER, f"Поймал чипалах :с\nСоединений: {CONNECT_COUNTER}\nError: {repr(err)}")
         except Exception:
             await asyncio.sleep(60)
         else:
             break
-    print()
     pprint(result)
-    raise(err)
+    BOTLOG.exception(err)
 
 async def seek_and_send(vk_audio, db, msg, request = None):
     if not request: request = msg['text']
+
+    if len(request) > 55:
+        await sendMessage(msg['chat']['id'],
+                            f'Слишком большой запрос :с\nЕго длина({len(request)}) превысила 55',
+                            msg['message_id'])
+        return
     #seek music in vk
     current_page = 1
 
@@ -248,7 +262,7 @@ async def seek_and_send(vk_audio, db, msg, request = None):
                         msg['text'], \
                         {'inline_keyboard':inline_keyboard}, \
                         msg['message_id'],
-                        disable_web_page_preview=True)
+                        disable_web_page_preview = True)
 
 async def send_popular(vk_audio, db, msg):
     #seek music in vk
@@ -305,7 +319,7 @@ async def command_demon(vk_audio, db, msg, command = None):
             command = command[:mail_id+15].lower().replace('@musicforus_bot','')+command[mail_id+15:]
 
 
-    print(f'[{time.ctime()}] Command: /{command}')
+    BOTLOG.info(f"Command: /{command}")
 
     if command == 'start':
         if 'username' in msg['from']:
@@ -437,7 +451,7 @@ async def command_demon(vk_audio, db, msg, command = None):
                 )
                 return
 
-            print(f"[{time.ctime()}] Loading audios for ad")
+            BOTLOG.info(f"Loading audios for ad")
             for track in tracklist:
                 audio_id = f"{track['owner_id']}_{track['id']}"
                 #check audio in old loads
@@ -448,12 +462,12 @@ async def command_demon(vk_audio, db, msg, command = None):
                 response = await requests.head(track['url'])
                 track_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
                 if track_size >= 50:
-                    print(f"[{time.ctime()}] {track['artist']}-{track['title']} to big: {track_size} MB")
+                    BOTLOG.info(f"{track['artist']}-{track['title']} to big: {track_size} MB")
                     track = None
                     continue
                 response = await requests.get(track['url'])
 
-                print(f"[{time.ctime()}] Ready Track: {track['artist']}-{track['title']} {track_size} MB")
+                BOTLOG.info(f"Ready Track: {track['artist']}-{track['title']} {track_size} MB")
                 #send new audio file
                 response = await sendAudio(
                     msg['chat']['id'],
@@ -591,13 +605,13 @@ async def workerMsg(vk_audio, db, msg):
         else:
             #just message
             if tg_lib.all_mode_check(db, msg['chat']['id']):
-                print(f"[{time.ctime()}] Message: {msg['text']}")
+                BOTLOG.info(f"Message: {msg['text']}")
                 await seek_and_send(vk_audio, db, msg)
 
 
 async def workerCallback(vk_audio, db, callback):
     data = callback['data'].split('@')
-    print(f"[{time.ctime()}] Callback data: {data}")
+    BOTLOG.info(f"Callback data: {data}")
     command, data = data[0], data[1:]
 
     if command == 'd' :
@@ -701,7 +715,6 @@ async def workerCallback(vk_audio, db, callback):
             inline_keyboard = []
             if musiclist:
                 for music in musiclist:
-                    #print(music)
                     duration = time.gmtime(music['duration'])
                     inline_keyboard.append([{
                         'text': html.unescape(f"{music['artist']} - {music['title']} ({duration.tm_min}:{duration.tm_sec:02})".replace("$#","&#")),
@@ -765,7 +778,7 @@ async def result_demon(vk_audio, db, result):
 async def WHlistener(vk_audio, db):
     #asyncio.get_event_loop().set_debug(True)
 
-    print(f"[{time.ctime()}] Set Webhook...")
+    BOTLOG.info(f"Set Webhook...")
     if SELF_SSL:
         #create ssl for webhook
         create_self_signed_cert(CERT_DIR)
@@ -781,11 +794,21 @@ async def WHlistener(vk_audio, db):
     else:
         await setWebhook(WEBHOOK_URL)
 
-    response = await getWebhookInfo()
-    pprint(response.json())
-    if response.json()['result']['url'] != WEBHOOK_URL:
-        print(f"[{time.ctime()}] WebHook wasn't setted!")
-        print(f"[{time.ctime()}] Shut down...")
+    response = (await getWebhookInfo()).json()
+    if not response['ok']:
+        BOTLOG.info("Webhook wasn't setted")
+        pprint(response)
+        BOTLOG.info(f"Shut down...")
+        return
+
+    BOTLOG.info("New webhook:")
+    BOTLOG.info(f"\tUrl: {response['result']['url']}")
+    BOTLOG.info(f"\tPending update: {response['result']['pending_update_count']}")
+    BOTLOG.info(f"\tCustom certificate: {response['result']['has_custom_certificate']}")
+
+    if response['result']['url'] != WEBHOOK_URL:
+        BOTLOG.info(f"WebHook wasn't setted!")
+        BOTLOG.info(f"Shut down...")
         return
 
 
@@ -798,7 +821,7 @@ async def WHlistener(vk_audio, db):
             await result_demon(vk_audio, db, request.json)
         return sanic_json({"ok": True})
 
-    print(f"[{time.ctime()}] Listening...")
+    BOTLOG.info(f"Listening...")
     server = app_listener.create_server(
         host = HOST_IP,
         port = PORT,
@@ -818,7 +841,7 @@ async def LPlistener(vk_audio, db):
     await setWebhook()
 
     #start listen
-    print(f"[{time.ctime()}] Listening...")
+    BOTLOG.info(f"Listening...")
     while True:
 
         #get new messages
@@ -842,9 +865,10 @@ async def LPlistener(vk_audio, db):
 
 #start func
 def start_bot(WEB_HOOK_FLAG = True):
-    print(f"[{time.ctime()}] Start...")
+
+    BOTLOG.info(f"Start...")
     #print important constants
-    print(f"""
+    BOTLOG.info(f"""
             {TG_TOKEN=}
             {VK_LOGIN=}
             {VK_PASSWORD=}
@@ -859,7 +883,7 @@ def start_bot(WEB_HOOK_FLAG = True):
 
     try:
         #database loading
-        print(f"[{time.ctime()}] Database loading...")
+        BOTLOG.info(f"Database loading...")
         db_connect = sqlite3.connect("botbase.db")
         db_cursor = db_connect.cursor()
 
@@ -889,13 +913,13 @@ def start_bot(WEB_HOOK_FLAG = True):
             counter INT NOT NULL)""")
 
         db_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-        print("TABLES:")
+        BOTLOG.info("TABLES:")
         for table in db_cursor.fetchall():
-            print("\t",table)
+            BOTLOG.info(f"\t{table[0]}")
 
         loop = asyncio.get_event_loop()
         #autetifications in vk
-        print(f"[{time.ctime()}] Vk autentification...")
+        BOTLOG.info(f"Vk autentification...")
         vk_session = AsyncVkApi(VK_LOGIN, VK_PASSWORD, auth_handler=tg_lib.auth_handler, loop = loop)
         vk_session.auth()
 
@@ -910,12 +934,11 @@ def start_bot(WEB_HOOK_FLAG = True):
         #Force exit with ctrl+C
         db_connect.close()
         loop.close()
-        print(f"[{time.ctime()}] Key force exit.")
+        BOTLOG.info(f"Key force exit.")
     except Exception as err:
         #Any error should send ping message to developer
-        print(f"[{time.ctime()}] я упал :с")
+        BOTLOG.info(f"я упал :с")
         while True:
-            print(f"[{time.ctime()}] Пробую уведомить о падении...\r")
             try:
                 asyncio.run(sendMessage(TG_SHELTER, "я упал :с"))
             except Exception:
@@ -925,6 +948,7 @@ def start_bot(WEB_HOOK_FLAG = True):
 
         db_connect.close()
         loop.close()
+        BOTLOG.exception(err)
         raise(err)
 
 if __name__ == "__main__":

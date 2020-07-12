@@ -1,3 +1,6 @@
 *.db
 *.ini
-ssl_folder/
+*.crt
+*.key
+*.pem
+*.log
