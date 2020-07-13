@@ -14,7 +14,6 @@ class DictionaryBomb():
     async def plant(self):
         while self.timer >= time.time():
             await asyncio.sleep(0)
-        print("cache deleted")
         self.dict.pop(self.key, None)
 
 

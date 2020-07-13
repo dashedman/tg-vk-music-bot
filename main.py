@@ -14,6 +14,7 @@ from pprint import pprint, pformat
 from collections import namedtuple, deque
 from copy import deepcopy
 from functools import partial
+from random import randint
 
 #ssl generate lib
 from OpenSSL import crypto
@@ -57,7 +58,7 @@ console_out = logging.StreamHandler()
 
 logging.basicConfig(
     handlers=(file_log, console_out),
-    format='[%(asctime)s | %(levelname)s] %(message)s',
+    format='[%(asctime)s|%(levelname)s]%(name)s: %(message)s',
     datefmt='%a %b %d %H:%M:%S %Y',
     level=logging.INFO)
 BOTLOG = logging.getLogger("bot")
@@ -227,8 +228,6 @@ async def send_error(result, err):
             await asyncio.sleep(60)
         else:
             break
-    BOTLOG.debug(pformat(result))
-    BOTLOG.exception(err)
 
 async def seek_and_send(vk_audio, db, msg, request = None):
     if not request: request = msg['text']
@@ -423,6 +422,7 @@ async def workerCallback(vk_audio, db, callback):
                 IS_DOWNLOAD.discard(audio_id)
                 return
 
+            BOTLOG.info(f"Loading audio {audio_id} | {audio_size} MB")
             while True:
                 try:
                     response = await requests.get(new_audio['url'])
@@ -430,6 +430,8 @@ async def workerCallback(vk_audio, db, callback):
                     await asyncio.sleep(0)
                 else:
                     break
+            BOTLOG.info(f"Successfull load {audio_id}")
+
 
 
             #send new audio file
@@ -784,6 +786,7 @@ async def command_demon(vk_audio, db, msg, command = None):
 
 async def result_demon(vk_audio, db, result):
     global CONNECT_COUNTER
+    tid = randint(1,1000)
     CONNECT_COUNTER += 1
     try:
         #just message
@@ -797,6 +800,7 @@ async def result_demon(vk_audio, db, result):
 
     except Exception as err:
         asyncio.create_task(send_error(result,err))
+        BOTLOG.exception(f"Error ocured {err}")
     finally:
         CONNECT_COUNTER -= 1
     return
@@ -972,7 +976,7 @@ def start_bot(WEB_HOOK_FLAG = True):
 
         db_connect.close()
         loop.close()
-        BOTLOG.exception(err)
+        BOTLOG.exception()
         raise(err)
     except BaseException as err:
         #Force exit with ctrl+C

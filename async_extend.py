@@ -623,6 +623,9 @@ TRACKS_PER_USER_PAGE = 2000
 TRACKS_PER_ALBUM_PAGE = 2000
 ALBUMS_PER_USER_PAGE = 100
 
+logger = logging.getLogger("vAudio")
+
+
 class AsyncVkAudio(object):
     """
     VkAudio from vk_api.audio
@@ -1149,10 +1152,12 @@ async def scrap_tracks(ids, user_id, http, convert_m3u8_links=True):
         if delay > 0:
             await asyncio.sleep(delay)
 
+        logger.info(f"Http post for Scrap ids {ids_group}")
         result = (await http.post(
             'https://m.vk.com/audio',
             data={'act': 'reload_audio', 'ids': ','.join(['_'.join(i) for i in ids_group])}
         )).json()
+        logger.info(f"Http post for Scrap ids end {ids_group}")
 
         last_request = time.time()
         if result['data']:
