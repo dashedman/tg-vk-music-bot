@@ -122,7 +122,7 @@ def create_self_signed_cert(cert_dir):
     return crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode("ascii")
 
 #cache functions
-def get_from_cash(cache, key, current_page):
+def get_cache(cache, key, current_page):
     cache[key][0].replant(time.time()+60*5)
     return cache[key][1]
 
