@@ -1137,11 +1137,10 @@ class AsyncVkAudio(object):
         :param owner_id: ID владельца (отрицательные значения для групп)
         :param audio_id: ID аудио
         """
-        logger.info(f"Http get for get_audio_by_id {owner_id}_{audio_id}")
+        
         response = await self._vk.http.get(
             f'https://m.vk.com/audio{owner_id}_{audio_id}'
         )
-        logger.info(f"Http get for get_audio_by_id end ")
 
         ids = scrap_ids_from_html(
             response.text,
@@ -1255,12 +1254,10 @@ async def scrap_tracks(ids, user_id, http, convert_m3u8_links=True):
         if delay > 0:
             await asyncio.sleep(delay)
 
-        logger.info(f"Http post for Scrap ids {ids_group}")
         result = (await http.post(
             'https://m.vk.com/audio',
             data={'act': 'reload_audio', 'ids': ','.join(('_'.join(i) for i in ids_group))}
         )).json()
-        logger.info(f"Http post for Scrap ids end {ids_group}")
 
         last_request = time.time()
         if result['data']:
