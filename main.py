@@ -369,11 +369,16 @@ async def check_advertisement(db, msg):
     count = tg_lib.get_chat_counter(db, msg['chat']['id'])
     if count <= 1:
         count = AD_COOLDOWN
+        tg_lib.put_chat_counter(db, msg['chat']['id'], count)
 
         ad = tg_lib.get_ad(db)
         if not ad: return
         ad_id, ad_text, ad_json_list, ad_counter = ad
 
+        if ad_counter > 1:
+            tg_lib.decrement_ad(db, ad_id, ad_counter-1)
+        else:
+            tg_lib.delete_ad(db, ad_id)
         inline_keyboard = [[{
                              'text':'⤵️ Show',
                              'callback_data': f'e@!ad@{ad_id}'
@@ -387,14 +392,11 @@ async def check_advertisement(db, msg):
             reply_markup={'inline_keyboard': inline_keyboard},
             reply_to_message_id = msg['message_id']
         )
-        if ad_counter > 1:
-            tg_lib.decrement_ad(db, ad_id, ad_counter-1)
-        else:
-            tg_lib.delete_ad(db, ad_id)
+
+
     else:
         count -= 1
-
-    tg_lib.put_chat_counter(db, msg['chat']['id'], count)
+        tg_lib.put_chat_counter(db, msg['chat']['id'], count)
 
 
 #asynchronious workers
