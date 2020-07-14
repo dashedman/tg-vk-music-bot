@@ -84,7 +84,7 @@ CERT_DIR = ""
 SELF_SSL = True
 
 MEGABYTE_SIZE = 1<<20
-MUSIC_LIST_LENGTH = 9
+MUSIC_LIST_LENGTH = 2
 MUSICLIST_CACHE= {}
 TRACK_CACHE= {}
 IS_DOWNLOAD = set()
@@ -204,8 +204,9 @@ async def sendKeyboard(chat_id, text, keyboard, replay_message_id = None, **kwar
 
     if not r['ok']:
         BOTLOG.info(pformat(r))
+        pprint(data)
         if r['error_code'] != 400:
-            raise Exception(f"bad Keyboard: {r}")
+            raise Exception(f"bad Keyboard: {r}\n")
         else: return
     return r['result']
 
@@ -266,9 +267,9 @@ async def send_error(result, err):
 async def seek_and_send(vk_audio, db, msg, request = None):
     if not request: request = msg['text']
 
-    if len(request) > 55:
+    if len(request.encode("utf-8")) > 59:
         await sendMessage(msg['chat']['id'],
-                            f'Слишком большой запрос :с\nЕго длина({len(request)}) превысила 55',
+                            f'Слишком большой запрос :с\n',
                             msg['message_id'])
         return
     #seek music in vk
@@ -817,6 +818,15 @@ async def command_demon(vk_audio, db, msg, command = None):
                 msg['chat']['id'],
                 f"Ads:\n"+str_list,
             )
+        elif command == "cache":
+            str_list=""
+            for it, request in enumerate(MUSICLIST_CACHE):
+                str_list += f"{it}. [{request}]: len={len(MUSICLIST_CACHE[request][1])} etime={MUSICLIST_CACHE[request][0].timer}\n"
+            await sendMessage(
+                msg['chat']['id'],
+                f"Time now: {time.time()}\nMusic list cashe({len(MUSICLIST_CACHE)}):\n"+str_list,
+            )
+
 
 async def result_demon(vk_audio, db, result):
     global CONNECT_COUNTER
@@ -1022,7 +1032,7 @@ if __name__ == "__main__":
     #parse args
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-wh', action="store", dest="webhook_on", default=0, type=int)
+    parser.add_argument('-wh', action="store", dest="webhook_on", default=1, type=int)
     parser.add_argument('-p', action="store", dest="port", default=None, type=int)
     parser.add_argument('-i', action="store", dest="ip", default=None)
     parser.add_argument('-d', action="store", dest="domen", default=None)
