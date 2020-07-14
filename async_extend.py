@@ -1025,13 +1025,13 @@ class AsyncVkAudio(object):
             'https://vk.com/audio',
             data={
                 'block':'chart',
-                'section':'recoms'
+                'section':'explore'
             }
         )
         json_response = json.loads(scrap_json(response.text))
 
         ids = scrap_ids(
-            json_response['sectionData']['recoms']['playlist']['list']
+            json_response['sectionData']['explore']['playlist']['list']
         )
 
         #len(tracks) <= 10
@@ -1066,13 +1066,13 @@ class AsyncVkAudio(object):
             'https://vk.com/audio',
             data={
                 'block':'new_songs',
-                'section':'recoms'
+                'section':'explore'
             }
         )
         json_response = json.loads(scrap_json(response.text))
 
         ids = scrap_ids(
-            json_response['sectionData']['recoms']['playlist']['list']
+            json_response['sectionData']['explore']['playlist']['list']
         )
 
         #len(tracks) <= 10
@@ -1099,8 +1099,8 @@ class AsyncVkAudio(object):
                 data={
                     'al': 1,
                     'act': 'load_catalog_section',
-                    'section_id': json_response['sectionData']['recoms']['sectionId'],
-                    'start_from': json_response['sectionData']['recoms']['nextFrom']
+                    'section_id': json_response['sectionData']['explore']['sectionId'],
+                    'start_from': json_response['sectionData']['explore']['nextFrom']
                 }
             )
 
@@ -1137,7 +1137,7 @@ class AsyncVkAudio(object):
         :param owner_id: ID владельца (отрицательные значения для групп)
         :param audio_id: ID аудио
         """
-        
+
         response = await self._vk.http.get(
             f'https://m.vk.com/audio{owner_id}_{audio_id}'
         )
