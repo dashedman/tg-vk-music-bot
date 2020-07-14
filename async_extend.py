@@ -4,15 +4,31 @@ import random
 import re
 import threading
 import time
+import datetime
 
+from urllib.parse import urljoin, urlparse
 from itertools import islice
-
-
-import asyncio
-import requests_async as requests
-import six
+from pprint import pprint
 
 from bs4 import BeautifulSoup
+
+import asyncio
+import requests
+import requests_async as arequests
+import six
+
+from requests.cookies import merge_cookies
+from requests.exceptions import (
+    ChunkedEncodingError,
+    ContentDecodingError,
+    InvalidSchema,
+    TooManyRedirects,
+)
+from requests.status_codes import codes
+from requests.utils import requote_uri, rewind_body
+
+from requests_async import adapters
+from requests_async.cookies import extract_cookies_to_jar
 
 
 import jconfig
@@ -40,6 +56,92 @@ RE_PHONE_POSTFIX = re.compile(r'phone_postfix">.*?(\d+).*?<')
 
 DEFAULT_USER_SCOPE = sum(VkUserPermissions)
 
+"""Библиотека которая реализует requests
+ имеет баг с состоянием гонки
+ поэтому вписан костыль синхронизации"""
+
+class SyncSession(arequests.Session):
+
+    sync_flag = False
+    async def send(self, request, **kwargs):
+        """Send a given PreparedRequest.
+
+        :rtype: requests.Response
+        """
+        # Set defaults that the hooks can utilize to ensure they always have
+        # the correct parameters to reproduce the previous request.
+        kwargs.setdefault("stream", self.stream)
+        kwargs.setdefault("verify", self.verify)
+        kwargs.setdefault("cert", self.cert)
+        kwargs.setdefault("proxies", self.proxies)
+
+        # It's possible that users might accidentally send a Request object.
+        # Guard against that specific failure case.
+        if isinstance(request, requests.models.Request):
+            raise ValueError("You can only send PreparedRequests.")
+
+        # Set up variables needed for resolve_redirects and dispatching of hooks
+        allow_redirects = kwargs.pop("allow_redirects", True)
+        stream = kwargs.get("stream")
+        hooks = request.hooks
+
+        # Get the appropriate adapter to use
+        adapter = self.get_adapter(url=request.url)
+
+        # Start time (approximately) of the request
+        start = requests.sessions.preferred_clock()
+
+        while self.sync_flag:
+            await asyncio.sleep(0)
+        # Send the request
+        self.sync_flag = True
+        r = await adapter.send(request, **kwargs)
+        self.sync_flag = False
+
+        # Total elapsed time of the request (approximately)
+        elapsed = requests.sessions.preferred_clock() - start
+        r.elapsed = datetime.timedelta(seconds=elapsed)
+
+        # Response manipulation hooks
+        r = requests.hooks.dispatch_hook("response", hooks, r, **kwargs)
+
+        # Persist cookies
+        if r.history:
+
+            # If the hooks create history then we want those cookies too
+            for resp in r.history:
+                extract_cookies_to_jar(self.cookies, resp.request, resp.raw)
+
+        extract_cookies_to_jar(self.cookies, request, r.raw)
+
+        # Redirect resolving.
+        history = []
+        if allow_redirects:
+            async for resp in self.resolve_redirects(r, request, **kwargs):
+                history.append(resp)
+
+        # Shuffle things around if there's history.
+        if history:
+            # Insert the first (original) request at the start
+            history.insert(0, r)
+            # Get the last request made
+            r = history.pop()
+            r.history = history
+
+        # If redirects aren't being followed, store the response on the Request for Response.next().
+        if not allow_redirects:
+            try:
+                redirect_gen = self.resolve_redirects(
+                    r, request, yield_requests=True, **kwargs
+                )
+                r._next = await redirect_gen.__anext__()
+            except StopAsyncIteration:
+                pass
+
+        if not stream:
+            await r.read()
+
+        return r
 
 class AsyncVkApi(object):
     """
@@ -67,7 +169,7 @@ class AsyncVkApi(object):
         self.storage = config(self.login, filename=config_filename)
 
 
-        self.http = session or requests.Session()
+        self.http = session or SyncSession()#requests.Session()
         self.loop = loop or asyncio.get_event_loop()
 
         if not session:
@@ -397,7 +499,7 @@ class AsyncVkApi(object):
             url = search_re(RE_TOKEN_URL, response.text)
 
             if url:
-                response = asyncio.run(self.http.get(url))
+                response = await self.http.get(url)
 
         if 'access_token' in response.url:
             params = response.url.split('#', 1)[1].split('&')
@@ -1035,10 +1137,11 @@ class AsyncVkAudio(object):
         :param owner_id: ID владельца (отрицательные значения для групп)
         :param audio_id: ID аудио
         """
+        logger.info(f"Http get for get_audio_by_id {owner_id}_{audio_id}")
         response = await self._vk.http.get(
-            'https://m.vk.com/audio{}_{}'.format(owner_id, audio_id),
-            allow_redirects=False
+            f'https://m.vk.com/audio{owner_id}_{audio_id}'
         )
+        logger.info(f"Http get for get_audio_by_id end ")
 
         ids = scrap_ids_from_html(
             response.text,
@@ -1146,7 +1249,7 @@ async def scrap_tracks(ids, user_id, http, convert_m3u8_links=True):
 
     last_request = 0.0
 
-    for ids_group in [ids[i:i + 10] for i in range(0, len(ids), 10)]:
+    for ids_group in (ids[i:i + 10] for i in range(0, len(ids), 10)):
         delay = RPS_DELAY_RELOAD_AUDIO - (time.time() - last_request)
 
         if delay > 0:
@@ -1155,7 +1258,7 @@ async def scrap_tracks(ids, user_id, http, convert_m3u8_links=True):
         logger.info(f"Http post for Scrap ids {ids_group}")
         result = (await http.post(
             'https://m.vk.com/audio',
-            data={'act': 'reload_audio', 'ids': ','.join(['_'.join(i) for i in ids_group])}
+            data={'act': 'reload_audio', 'ids': ','.join(('_'.join(i) for i in ids_group))}
         )).json()
         logger.info(f"Http post for Scrap ids end {ids_group}")
 

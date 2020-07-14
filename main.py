@@ -39,6 +39,7 @@ from sanic.response import json as sanic_json
 
 #my local lib
 import tg_lib
+from tg_lib import DictionaryBomb
 from ui_constants import *
 
 """
@@ -58,7 +59,7 @@ console_out = logging.StreamHandler()
 
 logging.basicConfig(
     handlers=(file_log, console_out),
-    format='[%(asctime)s|%(levelname)s]%(name)s: %(message)s',
+    format='[%(asctime)s | %(levelname)s] %(name)s: %(message)s',
     datefmt='%a %b %d %H:%M:%S %Y',
     level=logging.INFO)
 BOTLOG = logging.getLogger("bot")
@@ -85,6 +86,7 @@ SELF_SSL = True
 MEGABYTE_SIZE = 1<<20
 MUSIC_LIST_LENGTH = 9
 MUSICLIST_CACHE= {}
+TRACK_CACHE= {}
 IS_DOWNLOAD = set()
 CONNECT_COUNTER = 0
 AD_COOLDOWN = 25
@@ -118,6 +120,38 @@ def create_self_signed_cert(cert_dir):
         f.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, k).decode("ascii"))
 
     return crypto.dump_certificate(crypto.FILETYPE_PEM, cert).decode("ascii")
+
+#cache functions
+def get_from_cash(cache, key, current_page):
+    cache[key][0].replant(time.time()+60*5)
+    return cache[key][1]
+
+async def caching_list(vk_audio, request):
+    if request in MUSICLIST_CACHE: return
+    #bomb on 5 minutes
+    bomb = DictionaryBomb(MUSICLIST_CACHE, request, time.time()+60*5)
+
+    if request == "!popular":
+        generator = vk_audio.get_popular_iter()
+    elif request == "!new_songs":
+        generator = vk_audio.get_news_iter()
+    else:
+        generator = vk_audio.search_iter(request)
+
+    musiclist = []
+    MUSICLIST_CACHE[request] = (bomb, musiclist)
+
+    musiclist.append(await generator.__anext__())
+    for i in range(98):
+        try:
+            next_track = await generator.__anext__()
+            if next_track == musiclist[0]:break
+            musiclist.append(next_track)
+        except StopAsyncIteration:
+            break
+
+    asyncio.create_task(bomb.plant())
+
 
 #tg send functions
 async def setWebhook(url='', certificate=None):
@@ -241,7 +275,7 @@ async def seek_and_send(vk_audio, db, msg, request = None):
     current_page = 1
 
     if request in MUSICLIST_CACHE and current_page*MUSIC_LIST_LENGTH <= len(MUSICLIST_CACHE[request][1]):
-        musiclist = tg_lib.get_from_cash(MUSICLIST_CACHE, request, current_page)
+        musiclist = get_cache(MUSICLIST_CACHE, request, current_page)[(current_page-1)*9:current_page*9]
         NEXT_PAGE_FLAG = True
         if len(musiclist)<MUSIC_LIST_LENGTH or current_page == 11: NEXT_PAGE_FLAG = False
 
@@ -261,7 +295,7 @@ async def seek_and_send(vk_audio, db, msg, request = None):
                                 msg['message_id'])
             return
 
-        if NEXT_PAGE_FLAG: asyncio.create_task(tg_lib.caching_list(vk_audio, MUSICLIST_CACHE, request))
+        if NEXT_PAGE_FLAG: asyncio.create_task(caching_list(vk_audio, request))
     #construct inline keyboard for list
     inline_keyboard = tg_lib.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
 
@@ -278,7 +312,7 @@ async def send_popular(vk_audio, db, msg):
     request = "!popular"
 
     if request in MUSICLIST_CACHE and current_page*MUSIC_LIST_LENGTH <= len(MUSICLIST_CACHE[request][1]):
-        musiclist = tg_lib.get_from_cash(MUSICLIST_CACHE, request, current_page)
+        musiclist = get_cache(MUSICLIST_CACHE, request, current_page)[(current_page-1)*9:current_page*9]
         NEXT_PAGE_FLAG = True
         if len(musiclist)<MUSIC_LIST_LENGTH or current_page == 11: NEXT_PAGE_FLAG = False
     else:
@@ -290,7 +324,7 @@ async def send_popular(vk_audio, db, msg):
                 asyncio.sleep(1)
             else:
                 break
-        if NEXT_PAGE_FLAG: asyncio.create_task(tg_lib.caching_list(vk_audio, MUSICLIST_CACHE, request))
+        if NEXT_PAGE_FLAG: asyncio.create_task(caching_list(vk_audio, request))
 
     #construct inline keyboard for list
     inline_keyboard = tg_lib.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
@@ -307,7 +341,7 @@ async def send_new_songs(vk_audio, db, msg):
     request = "!new_songs"
 
     if request in MUSICLIST_CACHE and current_page*MUSIC_LIST_LENGTH <= len(MUSICLIST_CACHE[request][1]):
-        musiclist = tg_lib.get_from_cash(MUSICLIST_CACHE, request, current_page)
+        musiclist = get_cache(MUSICLIST_CACHE, request, current_page)[(current_page-1)*9:current_page*9]
         NEXT_PAGE_FLAG = True
         if len(musiclist)<MUSIC_LIST_LENGTH or current_page == 11: NEXT_PAGE_FLAG = False
     else:
@@ -319,7 +353,7 @@ async def send_new_songs(vk_audio, db, msg):
                 asyncio.sleep(1)
             else:
                 break
-        if NEXT_PAGE_FLAG: asyncio.create_task(tg_lib.caching_list(vk_audio, MUSICLIST_CACHE, request))
+        if NEXT_PAGE_FLAG: asyncio.create_task(caching_list(vk_audio, request))
 
     #construct inline keyboard for list
     inline_keyboard = tg_lib.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
@@ -402,13 +436,14 @@ async def workerCallback(vk_audio, db, callback):
         else:
             IS_DOWNLOAD.add(audio_id)
 
-            while True:
+            new_audio = await vk_audio.get_audio_by_id(*data)
+            """while True:
                 try:
                     new_audio = await vk_audio.get_audio_by_id(*data)
                 except ConnectionError:
                     await asyncio.sleep(1)
                 else:
-                    break
+                    break"""
 
             #download audio
             response = await requests.head(new_audio['url'])
@@ -422,7 +457,6 @@ async def workerCallback(vk_audio, db, callback):
                 IS_DOWNLOAD.discard(audio_id)
                 return
 
-            BOTLOG.info(f"Loading audio {audio_id} | {audio_size} MB")
             while True:
                 try:
                     response = await requests.get(new_audio['url'])
@@ -430,8 +464,6 @@ async def workerCallback(vk_audio, db, callback):
                     await asyncio.sleep(0)
                 else:
                     break
-            BOTLOG.info(f"Successfull load {audio_id}")
-
 
 
             #send new audio file
@@ -466,7 +498,7 @@ async def workerCallback(vk_audio, db, callback):
         current_page = int(data[1])# or ad_id for ad
 
         if request in MUSICLIST_CACHE and current_page*MUSIC_LIST_LENGTH <= len(MUSICLIST_CACHE[request][1]):
-            musiclist = tg_lib.get_from_cash(MUSICLIST_CACHE, request, current_page)
+            musiclist = get_cache(MUSICLIST_CACHE, request, current_page)[(current_page-1)*9:current_page*9]
             NEXT_PAGE_FLAG = True
             if len(musiclist)<MUSIC_LIST_LENGTH or current_page == 11: NEXT_PAGE_FLAG = False
         else:
@@ -486,7 +518,7 @@ async def workerCallback(vk_audio, db, callback):
                     asyncio.sleep(1)
                 else:
                     break
-            if request != "!ad" and NEXT_PAGE_FLAG: asyncio.create_task(tg_lib.caching_list(vk_audio, MUSICLIST_CACHE, request))
+            if request != "!ad" and NEXT_PAGE_FLAG: asyncio.create_task(caching_list(vk_audio, request))
 
         #construct inline keyboard for list
         if request != "!ad":
@@ -976,7 +1008,7 @@ def start_bot(WEB_HOOK_FLAG = True):
 
         db_connect.close()
         loop.close()
-        BOTLOG.exception()
+        BOTLOG.exception(f"Error ocured {err}")
         raise(err)
     except BaseException as err:
         #Force exit with ctrl+C
