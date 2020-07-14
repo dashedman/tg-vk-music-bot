@@ -693,7 +693,7 @@ async def command_demon(vk_audio, db, msg, command = None):
             caption = '\n'.join(data[2:])
 
             #get playlist ids
-            matches = re.search(r"z=audio_playlist(.*?)_(.*)(&|%)?", album_url)
+            matches = re.search(r"=audio_playlist(.*?)_(.*)(&|%)?", album_url)
             owner_id = matches.group(1)
             album_id = matches.group(2)
             matches = re.search(r"%2F(.*)&?", album_url)
