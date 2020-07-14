@@ -579,7 +579,7 @@ async def command_demon(vk_audio, db, msg, command = None):
     if command == 'start':
         if 'username' in msg['from']:
             await sendKeyboard(msg['chat']['id'], \
-                            f"Keyboard for @{msg['from']['username'] or msg['from']['id']}",
+                            f"Keyboard for @{msg['from'].get('username') or msg['from']['id']}",
                             {'keyboard': MAIN_KEYBOARD,
                              'resize_keyboard': True,
                              'one_time_keyboard': True,
@@ -616,7 +616,7 @@ async def command_demon(vk_audio, db, msg, command = None):
         }])
 
         await sendKeyboard(msg['chat']['id'],
-                            f"{msg['text']} for @{msg['from']['username'] or msg['from']['id']}",
+                            f"{msg['text']} for @{msg['from'].get('username') or msg['from']['id']}",
                             {'keyboard': tmp_settings_keyboard,
                              'resize_keyboard': True,
                              'selective':True })
@@ -629,7 +629,7 @@ async def command_demon(vk_audio, db, msg, command = None):
                                                else '🐵 Listen to all message'}])
 
         await sendKeyboard(msg['chat']['id'],
-                            f"Mode was changed via @{msg['from']['username'] or msg['from']['id']} (ON)",
+                            f"Mode was changed via @{msg['from'].get('username') or msg['from']['id']} (ON)",
                             {'keyboard': tmp_settings_keyboard,
                              'resize_keyboard': True,
                              'selective':True })
@@ -641,7 +641,7 @@ async def command_demon(vk_audio, db, msg, command = None):
                                                else '🐵 Listen to all message'}])
 
         await sendKeyboard(msg['chat']['id'],
-                            f"Mode was changed via @{msg['from']['username'] or msg['from']['id']} (OFF)",
+                            f"Mode was changed via @{msg['from'].get('username') or msg['from']['id']} (OFF)",
                             {'keyboard': tmp_settings_keyboard,
                              'resize_keyboard': True,
                              'selective':True })
