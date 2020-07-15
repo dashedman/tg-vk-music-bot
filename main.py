@@ -59,6 +59,7 @@ console_out = logging.StreamHandler()
 
 logging.basicConfig(
     handlers=(file_log, console_out),
+    filemode="w",
     format='[%(asctime)s | %(levelname)s] %(name)s: %(message)s',
     datefmt='%a %b %d %H:%M:%S %Y',
     level=logging.INFO)
@@ -472,8 +473,8 @@ async def workerCallback(vk_audio, db, callback):
             #send new audio file
             response = await sendAudio(callback['message']['chat']['id'],
                                         file = response.content,
-                                        title = html.unescape(new_audio['title']),
-                                        performer = html.unescape(new_audio['artist']),
+                                        title = html.unescape(new_audio['title'].replace("$#","&#")),
+                                        performer = html.unescape(new_audio['artist'].replace("$#","&#")),
                                         caption=f'{audio_size:.2f} MB f\n_via MusicForUs\_bot_'.replace('.','\.'),
                                         parse_mode='markdownv2')
 
@@ -820,11 +821,12 @@ async def command_demon(vk_audio, db, msg, command = None):
             )
         elif command == "cache":
             str_list=""
+            ntime = time.time()
             for it, request in enumerate(MUSICLIST_CACHE):
-                str_list += f"{it}. [{request}]: len={len(MUSICLIST_CACHE[request][1])} etime={MUSICLIST_CACHE[request][0].timer}\n"
+                str_list += f"{it}. [{request}]: len={len(MUSICLIST_CACHE[request][1])} etime={int(MUSICLIST_CACHE[request][0].timer-ntime)}\n"
             await sendMessage(
                 msg['chat']['id'],
-                f"Time now: {time.time()}\nMusic list cashe({len(MUSICLIST_CACHE)}):\n"+str_list,
+                f"Music list cashe({len(MUSICLIST_CACHE)}):\n"+str_list,
             )
 
 
