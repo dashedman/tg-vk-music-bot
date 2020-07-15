@@ -54,12 +54,11 @@ my_vk_password
 
 """
 #constants
-file_log = logging.FileHandler("botlogs.log")
+file_log = logging.FileHandler("botlogs.log", mode = "w")
 console_out = logging.StreamHandler()
 
 logging.basicConfig(
     handlers=(file_log, console_out),
-    filemode="w",
     format='[%(asctime)s | %(levelname)s] %(name)s: %(message)s',
     datefmt='%a %b %d %H:%M:%S %Y',
     level=logging.INFO)
