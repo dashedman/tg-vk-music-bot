@@ -198,7 +198,10 @@ class AsyncVkApi(object):
             self.http.cookies.get('remixsid6')
         )
 
-    def auth(self, reauth=False, token_only=False):
+    def sync_auth(self, reauth=False, token_only=False):
+        self.loop.run_until_complete(self.auth(reauth, token_only))
+
+    async def auth(self, reauth=False, token_only=False):
         """ Аутентификация
 
         :param reauth: Позволяет переавторизоваться, игнорируя сохраненные
@@ -238,9 +241,9 @@ class AsyncVkApi(object):
         ).get('scope_' + str(self.scope))
 
         if token_only:
-            self.loop.run_until_complete(self._auth_token(reauth=reauth))
+            await self._auth_token(reauth=reauth)
         else:
-            self.loop.run_until_complete(self._auth_cookies(reauth=reauth))
+            await self._auth_cookies(reauth=reauth)
 
     async def _auth_cookies(self, reauth=False):
 

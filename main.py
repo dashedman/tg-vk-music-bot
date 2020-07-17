@@ -851,9 +851,17 @@ async def result_demon(vk_audio, db, result):
     return
 
 
+async def reauth_demon(vk_session):
+    while True:
+        await asyncio.sleep(60*60*12)
+        BOTLOG.info("ReAuth")
+        await vk_session.auth()
+
+
+
 #listeners
 #~~flask~~ ~~vibora~~ sanic, requests
-async def WHlistener(vk_audio, db):
+async def WHlistener(vk_session, vk_audio, db):
     #asyncio.get_event_loop().set_debug(True)
 
     BOTLOG.info(f"Set Webhook...")
@@ -907,11 +915,12 @@ async def WHlistener(vk_audio, db):
         access_log = False,
         ssl = context if SELF_SSL else None
     )
+    asyncio.create_task(reauth_demon(vk_session))
     asyncio.create_task(server)
 
 
 #requests only
-async def LPlistener(vk_audio, db):
+async def LPlistener(vk_session, vk_audio, db):
     LONGPOLING_OFFSET = 0
     LONGPOLING_DELAY = 3
 
@@ -920,6 +929,7 @@ async def LPlistener(vk_audio, db):
 
     #start listen
     BOTLOG.info(f"Listening...")
+    asyncio.create_task(reauth_demon(vk_session))
     while True:
 
         #get new messages
@@ -999,13 +1009,13 @@ def start_bot(WEB_HOOK_FLAG = True):
         #autetifications in vk
         BOTLOG.info(f"Vk autentification...")
         vk_session = AsyncVkApi(VK_LOGIN, VK_PASSWORD, auth_handler=tg_lib.auth_handler, loop = loop)
-        vk_session.auth()
+        vk_session.sync_auth()
 
         #vk audio class for fetching music
         vk_audio = AsyncVkAudio(vk_session)
 
         #pick type of listener and run
-        loop.create_task((WHlistener if WEB_HOOK_FLAG else LPlistener)(vk_audio, db))
+        loop.create_task((WHlistener if WEB_HOOK_FLAG else LPlistener)(vk_session, vk_audio, db))
         loop.run_forever()
 
     except Exception as err:
