@@ -88,6 +88,7 @@ MUSIC_LIST_LENGTH = 9
 MUSICLIST_CACHE= {}
 TRACK_CACHE= {}
 IS_DOWNLOAD = set()
+IS_REAUTH = False
 CONNECT_COUNTER = 0
 AD_COOLDOWN = 25
 
@@ -830,9 +831,12 @@ async def command_demon(vk_audio, db, msg, command = None):
 
 
 async def result_demon(vk_audio, db, result):
-    global CONNECT_COUNTER
-    tid = randint(1,1000)
+    global CONNECT_COUNTER, IS_REAUTH
     CONNECT_COUNTER += 1
+
+    while IS_REAUTH:
+        await asyncio.sleep(0)
+
     try:
         #just message
         if 'message' in result:
@@ -852,10 +856,13 @@ async def result_demon(vk_audio, db, result):
 
 
 async def reauth_demon(vk_session):
+    global IS_REAUTH
     while True:
         await asyncio.sleep(60*60*12)
+        IS_REAUTH = True
         BOTLOG.info("ReAuth")
         await vk_session.auth()
+        IS_REAUTH = False
 
 
 
