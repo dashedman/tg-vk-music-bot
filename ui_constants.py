@@ -24,11 +24,13 @@ HELP_TEXT = """❓ Help
 
 👑 /popular or /chart to find most popular songs.
 
+🆕 /new_songs to find most popular songs.
+
 /about me c:
 """
 
 QUICK_TEXT = """🏃 Quick!
-Just enter /f [track_title] 👇 and i'll try to find it! 🤝"""
+Just enter '/f [track_title]' 👇 and i'll try to find it! 🤝"""
 
 ABOUT_TEXT = """📔 About!
 
