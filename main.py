@@ -181,7 +181,10 @@ async def sendMessage(chat_id, text, replay_message_id = None, **kwargs):
     r = response.json()
 
     if not r['ok']:
-        raise Exception(f"bad Message: {r}")
+        if r['error_code'] == 429:
+            await sendMessage(chat_id, f"Слишком много запросов! Пожалуйста повторите через {r['parameters']['retry_after']+5} сек")
+        else:
+            raise Exception(f"bad Message: {r}")
     return r['result']
 
 async def sendKeyboard(chat_id, text, keyboard, replay_message_id = None, **kwargs):
@@ -206,7 +209,9 @@ async def sendKeyboard(chat_id, text, keyboard, replay_message_id = None, **kwar
     if not r['ok']:
         BOTLOG.info(pformat(r))
         pprint(data)
-        if r['error_code'] != 400:
+        if r['error_code'] == 429:
+            await sendMessage(chat_id, f"Слишком много запросов! Пожалуйста повторите через {r['parameters']['retry_after']+5} сек")
+        elif r['error_code'] != 400:
             raise Exception(f"bad Keyboard: {r}\n")
         else: return
     return r['result']
@@ -222,7 +227,9 @@ async def editKeyboard(chat_id, message_id, keyboard):
     r = response.json()
 
     if not r['ok']:
-        if r['error_code'] != 400:
+        if r['error_code'] == 429:
+            await sendMessage(chat_id, f"Слишком много запросов! Пожалуйста повторите через {r['parameters']['retry_after']+5} сек")
+        elif r['error_code'] != 400:
             raise Exception(f"bad Keyboard edit: {r}")
         else: return
     return r['result']
@@ -251,7 +258,10 @@ async def sendAudio(chat_id, file = None, url = None, telegram_id = None, **kwar
     response = await requests.post(TG_URL + 'sendAudio', data = data, files = files, timeout=None)
     r = response.json()
     if not r['ok']:
-        raise Exception(f"bad Audio: {r}")
+        if r['error_code'] == 429:
+            await sendMessage(chat_id, f"Слишком много запросов! Пожалуйста повторите через {r['parameters']['retry_after']+5} сек")
+        else:
+            raise Exception(f"bad Audio: {r}")
     return r['result']
 
 #msg demon-worker functions
@@ -830,7 +840,7 @@ async def command_demon(vk_audio, db, msg, command = None):
             )
 
 
-async def result_demon(vk_audio, db, result):
+async def result_demon(vk_session, vk_audio, db, result):
     global CONNECT_COUNTER, IS_REAUTH
     CONNECT_COUNTER += 1
 
@@ -847,6 +857,17 @@ async def result_demon(vk_audio, db, result):
         elif 'edited_message' in result:
             pass
 
+    except TypeError as err:
+        await reauth_demon(vk_session, False, True)
+        
+        #just message
+        if 'message' in result:
+            await workerMsg(vk_audio, db, result['message'])
+        #callback
+        elif 'callback_query' in result:
+            await workerCallback(vk_audio, db, result['callback_query'])
+        elif 'edited_message' in result:
+            pass
     except Exception as err:
         asyncio.create_task(send_error(result,err))
         BOTLOG.exception(f"Error ocured {err}")
@@ -855,14 +876,33 @@ async def result_demon(vk_audio, db, result):
     return
 
 
-async def reauth_demon(vk_session):
+async def reauth_demon(vk_session, webhook_on, once=False):
     global IS_REAUTH
     while True:
-        await asyncio.sleep(60*60*12)
+        if not once:
+            await asyncio.sleep(60*60*12)
+
         IS_REAUTH = True
         BOTLOG.info("ReAuth")
         await vk_session.auth()
+
+        if webhook_on:
+            if SELF_SSL:
+                #create ssl for webhook
+                create_self_signed_cert(CERT_DIR)
+                with open(os.path.join(CERT_DIR, CERT_FILE), "rb") as f:
+                    await setWebhook(WEBHOOK_URL, certificate = f)
+
+                context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
+                context.load_cert_chain(
+                    os.path.join(CERT_DIR, CERT_FILE),
+                    keyfile=os.path.join(CERT_DIR, KEY_FILE)
+                )
+
+            else:
+                await setWebhook(WEBHOOK_URL)
         IS_REAUTH = False
+        if once:break
 
 
 
@@ -911,7 +951,7 @@ async def WHlistener(vk_session, vk_audio, db):
     @app_listener.route('/{}/'.format(TG_TOKEN), methods = ['GET','POST'])
     async def receive_update(request):
         if request.method == "POST":
-            await result_demon(vk_audio, db, request.json)
+            await result_demon(vk_session, vk_audio, db, request.json)
         return sanic_json({"ok": True})
 
     BOTLOG.info(f"Listening...")
@@ -922,7 +962,7 @@ async def WHlistener(vk_session, vk_audio, db):
         access_log = False,
         ssl = context if SELF_SSL else None
     )
-    asyncio.create_task(reauth_demon(vk_session))
+    asyncio.create_task(reauth_demon(vk_session, True))
     asyncio.create_task(server)
 
 
@@ -936,7 +976,7 @@ async def LPlistener(vk_session, vk_audio, db):
 
     #start listen
     BOTLOG.info(f"Listening...")
-    asyncio.create_task(reauth_demon(vk_session))
+    asyncio.create_task(reauth_demon(vk_session, False))
     while True:
 
         #get new messages
@@ -956,7 +996,7 @@ async def LPlistener(vk_session, vk_audio, db):
         for result in r['result']:
             LONGPOLING_OFFSET = max(LONGPOLING_OFFSET,result['update_id'])+1
 
-            asyncio.create_task(result_demon(vk_audio, db, result))
+            asyncio.create_task(result_demon(vk_session, vk_audio, db, result))
 
 #start func
 def start_bot(WEB_HOOK_FLAG = True):
@@ -1045,6 +1085,10 @@ def start_bot(WEB_HOOK_FLAG = True):
         db_connect.close()
         loop.close()
         BOTLOG.info(f"Force exit. {err}")
+        with open("botlogs.log", "r") as f:
+            old_logs = f.read()
+        with open("last_botlogs.log", "w") as f:
+            f.write(old_logs)
 
 if __name__ == "__main__":
     #parse args
