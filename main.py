@@ -887,7 +887,7 @@ async def reauth_demon(vk_session, webhook_on, once=False):
         BOTLOG.info(f"ReAuth {once=}")
         await vk_session.auth()
 
-        if webhook_on
+        if webhook_on:
             BOTLOG.info(f"ReWebhook")
             if SELF_SSL:
                 with open(os.path.join(CERT_DIR, CERT_FILE), "rb") as f:
