@@ -882,6 +882,7 @@ async def reauth_demon(vk_session, webhook_on, once=False):
         if not once:
             await asyncio.sleep(60*60*8)
 
+        sendMessage(TG_SHELTER, f"ReAuth {once=}")
         IS_REAUTH = True
         BOTLOG.info(f"ReAuth {once=}")
         await vk_session.auth()
