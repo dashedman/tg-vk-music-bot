@@ -385,15 +385,15 @@ async def check_advertisement(db, msg):
 
         ad = tg_lib.get_ad(db)
         if not ad: return
-        ad_id, ad_text, ad_json_list, ad_counter = ad
+        ad_id, ad_text, ad_url, ad_counter = ad
 
         if ad_counter > 1:
             tg_lib.decrement_ad(db, ad_id, ad_counter-1)
         else:
             tg_lib.delete_ad(db, ad_id)
         inline_keyboard = [[{
-                             'text':'⤵️ Show',
-                             'callback_data': f'e@!ad@{ad_id}'
+                             'text':'⚡️ Link',
+                             'url': ad_url
                             }]]
 
         await sendMessage(
@@ -401,8 +401,7 @@ async def check_advertisement(db, msg):
             ad_text,
             disable_web_page_preview=True,
             parse_mode='markdownv2',
-            reply_markup={'inline_keyboard': inline_keyboard},
-            reply_to_message_id = msg['message_id']
+            reply_markup={'inline_keyboard': inline_keyboard}
         )
 
 
@@ -671,12 +670,12 @@ async def command_demon(vk_audio, db, msg, command = None):
                     "Актуальной рекламы нет"
                 )
                 return
-            ad_id, ad_text, ad_json_list, ad_counter = ad
+            ad_id, ad_text, ad_url, ad_counter = ad
 
             inline_keyboard = [[{
-                                 'text':'⤵️ Show',
-                                 'callback_data': f'e@!ad@{ad_id}'
-                                }]]
+                 'text':'⚡️ Link',
+                 'url': ad_url
+            }]]
 
             await sendMessage(
                 msg['chat']['id'],
@@ -687,100 +686,39 @@ async def command_demon(vk_audio, db, msg, command = None):
                 ad_text,
                 disable_web_page_preview=True,
                 parse_mode='markdownv2',
-                reply_markup={'inline_keyboard': inline_keyboard},
-                reply_to_message_id = msg['message_id']
+                reply_markup={'inline_keyboard': inline_keyboard}
             )
             if ad_counter > 1:
                 tg_lib.decrement_ad(db, ad_id, ad_counter-1)
             else:
                 tg_lib.delete_ad(db, ad_id)
 
-        elif command[:5] == "addpromo":
-            data = command[6:].split("\n")
+        elif command[:8] == "addpromo":
+            data = command[9:].split("\n")
 
             #get data about ad
             counter = int(data[0])
-            album_url = data[1]
+            url_butt = data[1]
             caption = '\n'.join(data[2:])
 
-            #get playlist ids
-            matches = re.search(r"=audio_playlist(.*?)_(.*)(&|%)?", album_url)
-            owner_id = matches.group(1)
-            album_id = matches.group(2)
-            matches = re.search(r"%2F(.*)&?", album_url)
-            access_hash = None
-            if matches: access_hash = matches.group(1)
-
-            #get three or less track from album
-            try:
-                generator = vk_audio.get_iter(owner_id = owner_id, album_id = album_id, access_hash = access_hash)
-                tracklist, NPF = await tg_lib.get_music_list(generator, list_length = 3)
-            except AccessDenied:
-                response = await sendMessage(
-                    msg['chat']['id'],
-                    f"Album access denied for {owner_id}_{album_id} AH: {access_hash}"
-                )
-                return
-
-            BOTLOG.info(f"Loading audios for ad")
-            for track in tracklist:
-                audio_id = f"{track['owner_id']}_{track['id']}"
-                #check audio in old loads
-                if audio_data := tg_lib.db_get_audio(db, audio_id):
-                    continue
-
-                #download audio
-                response = await requests.head(track['url'])
-                track_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
-                if track_size >= 50:
-                    BOTLOG.info(html.unescape(f"{track['artist']}-{track['title']} to big: {track_size} MB"))
-                    track = None
-                    continue
-                response = await requests.get(track['url'])
-
-                BOTLOG.info(html.unescape(f"Ready Track: {track['artist']}-{track['title']} {track_size} MB"))
-                #send new audio file
-                response = await sendAudio(
-                    msg['chat']['id'],
-                    file = response.content,
-                    title = html.unescape(track['title']),
-                    performer = html.unescape(track['artist']),
-                    caption=f'{track_size:.2f} MB f\n_via MusicForUs\_bot_'.replace('.','\.'),
-                    parse_mode='markdownv2'
-                )
-
-                #save new audio in db
-                tg_lib.db_put_audio(
-                    db,
-                    audio_id,
-                    response['audio']['file_id'],
-                    track_size
-                )
-
-            #save ad
-            while True:
-                try:
-                    tracklist.remove(None)
-                except ValueError:
-                    break
 
             tg_lib.put_ad(
                 db, None, caption,
-                json.dumps(tracklist), counter
+                url_butt, counter
             )
 
             #show new ad
             db.cursor.execute(
                 """SELECT * FROM ad_buffer
                 WHERE track_list=?"""
-                , (json.dumps(tracklist), ))
-            ad_id, ad_text, ad_list, ad_counter = db.cursor.fetchone()
+                , (url_butt, ))
+            ad_id, ad_text, ad_url, ad_counter = db.cursor.fetchone()
 
 
 
             inline_keyboard = [[{
-                'text':'⤵️ Show',
-                'callback_data': f'e@!ad@{ad_id}'
+                'text':'⚡️ Link',
+                'url': ad_url
             }]]
             try:
                 await sendMessage(
@@ -788,8 +726,7 @@ async def command_demon(vk_audio, db, msg, command = None):
                     caption,
                     parse_mode = 'markdownv2',
                     disable_web_page_preview=True,
-                    reply_markup = {'inline_keyboard': inline_keyboard},
-                    reply_to_message_id = msg['message_id']
+                    reply_markup = {'inline_keyboard': inline_keyboard}
                 )
 
                 await sendMessage(
@@ -804,9 +741,9 @@ async def command_demon(vk_audio, db, msg, command = None):
                 tg_lib.delete_ad(
                     db, ad_id
                 )
-        elif command[:6] == "delpromo ":
+        elif command[:9] == "delpromo ":
             try:
-                ad_id = int(command[6:])
+                ad_id = int(command[9:])
             except Exception as err:
                 await sendMessage(
                     msg['chat']['id'],
@@ -819,7 +756,7 @@ async def command_demon(vk_audio, db, msg, command = None):
                 msg['chat']['id'],
                 f"Ad {ad_id} deleted success!",
             )
-        elif command == "promolist":
+        elif command == "listpromo":
 
             db.cursor.execute("""SELECT * FROM ad_buffer""")
             str_list=""
