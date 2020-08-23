@@ -90,7 +90,7 @@ TRACK_CACHE= {}
 IS_DOWNLOAD = set()
 IS_REAUTH = False
 CONNECT_COUNTER = 0
-AD_COOLDOWN = 25
+AD_COOLDOWN = 250
 
 #functions
 
@@ -662,7 +662,7 @@ async def command_demon(vk_audio, db, msg, command = None):
 
     #commands for admins
     elif msg['chat']['id'] == TG_SHELTER:
-        if  command == 'advertisement':
+        if  command == 'getpromo':
             ad = tg_lib.get_ad(db)
 
             if not ad:
@@ -695,7 +695,7 @@ async def command_demon(vk_audio, db, msg, command = None):
             else:
                 tg_lib.delete_ad(db, ad_id)
 
-        elif command[:5] == "addad":
+        elif command[:5] == "addpromo":
             data = command[6:].split("\n")
 
             #get data about ad
@@ -804,7 +804,7 @@ async def command_demon(vk_audio, db, msg, command = None):
                 tg_lib.delete_ad(
                     db, ad_id
                 )
-        elif command[:6] == "delad ":
+        elif command[:6] == "delpromo ":
             try:
                 ad_id = int(command[6:])
             except Exception as err:
@@ -819,7 +819,7 @@ async def command_demon(vk_audio, db, msg, command = None):
                 msg['chat']['id'],
                 f"Ad {ad_id} deleted success!",
             )
-        elif command == "adlist":
+        elif command == "promolist":
 
             db.cursor.execute("""SELECT * FROM ad_buffer""")
             str_list=""
@@ -859,7 +859,7 @@ async def result_demon(vk_session, vk_audio, db, result):
 
     except TypeError as err:
         await reauth_demon(vk_session, False, True)
-        
+
         #just message
         if 'message' in result:
             await workerMsg(vk_audio, db, result['message'])
@@ -880,27 +880,20 @@ async def reauth_demon(vk_session, webhook_on, once=False):
     global IS_REAUTH
     while True:
         if not once:
-            await asyncio.sleep(60*60*12)
+            await asyncio.sleep(60*60*8)
 
         IS_REAUTH = True
-        BOTLOG.info("ReAuth")
+        BOTLOG.info(f"ReAuth {once=}")
         await vk_session.auth()
 
-        if webhook_on:
+        if webhook_on
+            BOTLOG.info(f"ReWebhook")
             if SELF_SSL:
-                #create ssl for webhook
-                create_self_signed_cert(CERT_DIR)
                 with open(os.path.join(CERT_DIR, CERT_FILE), "rb") as f:
                     await setWebhook(WEBHOOK_URL, certificate = f)
-
-                context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
-                context.load_cert_chain(
-                    os.path.join(CERT_DIR, CERT_FILE),
-                    keyfile=os.path.join(CERT_DIR, KEY_FILE)
-                )
-
             else:
                 await setWebhook(WEBHOOK_URL)
+        BOTLOG.info(f"endReAuth {once=}")
         IS_REAUTH = False
         if once:break
 
