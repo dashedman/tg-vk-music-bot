@@ -319,7 +319,6 @@ async def seek_and_send(vk_audio, db, msg, request = None):
                         disable_web_page_preview = True)
 
 async def send_popular(vk_audio, db, msg):
-    BOTLOG.info("popstart")
     #seek music in vk
     current_page = 1
     request = "!popular"
@@ -331,14 +330,10 @@ async def send_popular(vk_audio, db, msg):
     else:
         while True:
             try:
-                BOTLOG.info("popget")
                 res_generator = vk_audio.get_popular_iter()
-                BOTLOG.info("poplist")
                 musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
             except ConnectionError:
                 asyncio.sleep(1)
-            except:
-                raise("popexcept")
             else:
 
                 break
@@ -348,12 +343,10 @@ async def send_popular(vk_audio, db, msg):
     inline_keyboard = tg_lib.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
 
     #send answer
-    BOTLOG.info("popsend")
     await sendKeyboard(msg['chat']['id'], \
                         msg['text'], \
                         {'inline_keyboard':inline_keyboard}, \
                         msg['message_id'])
-    BOTLOG.info("popend")
 
 async def send_new_songs(vk_audio, db, msg):
     #seek music in vk

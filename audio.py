@@ -329,7 +329,6 @@ class VkAudio(object):
         :param offset: смещение
         """
 
-        print("response")
         response = self._vk.http.post(
             'https://vk.com/audio',
             data={
@@ -342,10 +341,8 @@ class VkAudio(object):
         ids = scrap_ids(
             json_response['sectionData']['recoms']['playlist']['list']
         )
-        pprint(json_response['sectionData']['recoms'])
 
         #len(tracks) <= 10
-        print("scrap")
         if offset:
             tracks = scrap_tracks(
                 ids[offset:],
@@ -361,7 +358,6 @@ class VkAudio(object):
                 http=self._vk.http
             )
 
-        print("t in ts")
         for track in tracks:
             yield track
 
