@@ -254,7 +254,7 @@ class VkAudio(object):
 
         return islice(self.search_iter(q, offset=offset), count)
 
-    async def search_iter(self, q, offset=0):
+    def search_iter(self, q, offset=0):
         """ Искать аудиозаписи (генератор)
         :param q: запрос
         """
@@ -323,7 +323,7 @@ class VkAudio(object):
             json_response = json.loads(response.text.replace('<!--', ''))
 
 
-    async def get_popular_iter(self,offset=0):
+    def get_popular_iter(self,offset=0):
         """ Искать популярные аудиозаписи  (генератор)
 
         :param offset: смещение
@@ -342,6 +342,7 @@ class VkAudio(object):
         ids = scrap_ids(
             json_response['sectionData']['recoms']['playlist']['list']
         )
+        pprint(json_response['sectionData']['recoms'])
 
         #len(tracks) <= 10
         print("scrap")
@@ -365,7 +366,7 @@ class VkAudio(object):
             yield track
 
 
-    async def get_news_iter(self,offset=0):
+    def get_news_iter(self,offset=0):
         """ Искать популярные аудиозаписи  (генератор)
 
         :param offset: смещение
