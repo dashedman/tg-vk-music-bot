@@ -338,7 +338,7 @@ async def send_popular(vk_audio, db, msg):
             except ConnectionError:
                 asyncio.sleep(1)
             except:
-                raise(pop)
+                raise("popexcept")
             else:
 
                 break
