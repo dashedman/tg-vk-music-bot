@@ -65,6 +65,7 @@ def get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page=1):
 async def get_music_list(generator, current_page=1, list_length = 1):
     NEXT_PAGE_FLAG = False
     musiclist = []
+    print(generator)
     try:
         print("0")
         musiclist.append( await generator.__anext__() )
