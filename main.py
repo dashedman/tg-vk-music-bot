@@ -337,7 +337,10 @@ async def send_popular(vk_audio, db, msg):
                 musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
             except ConnectionError:
                 asyncio.sleep(1)
+            except:
+                raise(pop)
             else:
+
                 break
         if NEXT_PAGE_FLAG: asyncio.create_task(caching_list(vk_audio, request))
 
