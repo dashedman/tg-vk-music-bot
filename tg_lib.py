@@ -66,11 +66,13 @@ async def get_music_list(generator, current_page=1, list_length = 1):
     NEXT_PAGE_FLAG = False
     musiclist = []
     try:
+        print("0")
         musiclist.append( await generator.__anext__() )
     except StopAsyncIteration:
         pass
     else:
         for i in range(list_length-1):
+            print(i+1)
             try:
                 next_track = await generator.__anext__()
                 if next_track == musiclist[0]:break
@@ -80,6 +82,7 @@ async def get_music_list(generator, current_page=1, list_length = 1):
 
 
         else:
+            print(-1)
             try:
                  await generator.__anext__()
                  NEXT_PAGE_FLAG = True
