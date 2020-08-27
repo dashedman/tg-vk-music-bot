@@ -793,13 +793,12 @@ async def result_demon(vk_session, vk_audio, db, result):
         await asyncio.sleep(0)
 
     try:
-        if time.time() - result['date'] > 5*60:
-            BOTLOG.info("skip")
-            CONNECT_COUNTER -= 1
-            return
         #just message
         if 'message' in result:
-            await workerMsg(vk_audio, db, result['message'])
+            if time.time() - result['message']['date'] > 5*60:
+                BOTLOG.info("skip")
+            else:
+                await workerMsg(vk_audio, db, result['message'])
         #callback
         elif 'callback_query' in result:
             await workerCallback(vk_audio, db, result['callback_query'])
