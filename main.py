@@ -282,7 +282,6 @@ async def getChatMember(chat_id, user_id):
 
 #msg demon-worker functions
 async def is_admin(msg):
-    pprint(msg)
     if msg['chat']['type'] == "private":
         return True
     if 'all_members_are_administrators' in msg['chat'] and msg['chat']['all_members_are_administrators']:
