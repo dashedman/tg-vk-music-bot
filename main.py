@@ -90,7 +90,7 @@ TRACK_CACHE= {}
 IS_DOWNLOAD = set()
 IS_REAUTH = False
 CONNECT_COUNTER = 0
-AD_COOLDOWN = 250
+AD_COOLDOWN = 128
 
 #functions
 
@@ -264,7 +264,34 @@ async def sendAudio(chat_id, file = None, url = None, telegram_id = None, **kwar
             raise Exception(f"bad Audio: {r}")
     return r['result']
 
+async def getChatMember(chat_id, user_id):
+    data = {
+        'chat_id': chat_id,
+        'user_id': user_id
+    }
+
+    response = await requests.post(TG_URL + 'getChatMember', json = data, timeout=None)
+    r = response.json()
+
+    if not r['ok']:
+        if false and r['error_code'] == 429:
+            await sendMessage(chat_id, f"Слишком много запросов! Пожалуйста повторите через {r['parameters']['retry_after']+5} сек")
+        else:
+            raise Exception(f"bad Message: {r}")
+    return r['result']
+
 #msg demon-worker functions
+async def is_admin(msg):
+    pprint(msg)
+    if msg['chat']['type'] == "private":
+        return True
+    if 'all_members_are_administrators' in msg['chat'] and msg['chat']['all_members_are_administrators']:
+        return True
+    chat_member = await getChatMember(msg['chat']['id'], msg['from']['id'])
+    if chat_member['status'] == 'administrator' or chat_member['status'] == 'owner':
+        return True
+    return False
+
 async def send_error(result, err):
     BOTLOG.info(f"Поймал чипалах :с\nСоединений: {CONNECT_COUNTER}")
     while True:
@@ -439,15 +466,24 @@ async def workerCallback(vk_audio, db, callback):
 
         while audio_id in IS_DOWNLOAD:
             await asyncio.sleep(0.07)
+
+        OLD_DATA = True
         #check audio in old loads
         if audio_data := tg_lib.db_get_audio(db, audio_id):
             telegram_id, audio_size = audio_data
             #send id from old audio in telegram
-            await sendAudio(callback['message']['chat']['id'], \
-                            telegram_id = telegram_id,
-                            caption=f'{audio_size:.2f} MB t\n_via MusicForUs\_bot_'.replace('.','\.'),
-                            parse_mode='markdownv2')
-        else:
+            try:
+                await sendAudio(callback['message']['chat']['id'], \
+                                telegram_id = telegram_id,
+                                caption=f'{audio_size:.2f} MB t\n_via MusicForUs\_bot_'.replace('.','\.'),
+                                parse_mode='markdownv2')
+            except:
+                #if telegram clear his cache files
+                tg_lib.db_del_audio(db, audio_id)
+            else:
+                OLD_DATA = False
+
+        if OLD_DATA:
             IS_DOWNLOAD.add(audio_id)
 
             new_audio = await vk_audio.get_audio_by_id(*data)
@@ -636,30 +672,39 @@ async def command_demon(vk_audio, db, msg, command = None):
                              'selective':True })
 
     elif command == 'all_mode_on':
-        tg_lib.all_mode_on(db, msg['chat']['id'])
-        tmp_settings_keyboard = deepcopy(SETTINGS_KEYBOARD)
-        tmp_settings_keyboard.append([{'text':'🙈 Listen only to commands'
-                                               if tg_lib.all_mode_check(db, msg['chat']['id'])
-                                               else '🐵 Listen to all message'}])
+        if await is_admin(msg):
+            tg_lib.all_mode_on(db, msg['chat']['id'])
+            tmp_settings_keyboard = deepcopy(SETTINGS_KEYBOARD)
+            tmp_settings_keyboard.append([{'text':'🙈 Listen only to commands'
+                                                   if tg_lib.all_mode_check(db, msg['chat']['id'])
+                                                   else '🐵 Listen to all message'}])
 
-        await sendKeyboard(msg['chat']['id'],
-                            f"Mode was changed via @{msg['from'].get('username') or msg['from']['id']} (ON)",
-                            {'keyboard': tmp_settings_keyboard,
-                             'resize_keyboard': True,
-                             'selective':True })
+            await sendKeyboard(msg['chat']['id'],
+                                f"Mode was changed via @{msg['from'].get('username') or msg['from']['id']} (ON)",
+                                {'keyboard': tmp_settings_keyboard,
+                                 'resize_keyboard': True,
+                                 'selective':True })
+        else:
+            await sendMessage(msg['chat']['id'],
+                                f'Недостаточно прав!\n',
+                                msg['message_id'])
     elif command == 'all_mode_off':
-        tg_lib.all_mode_off(db, msg['chat']['id'])
-        tmp_settings_keyboard = deepcopy(SETTINGS_KEYBOARD)
-        tmp_settings_keyboard.append([{'text':'🙈 Listen only to commands'
-                                               if tg_lib.all_mode_check(db, msg['chat']['id'])
-                                               else '🐵 Listen to all message'}])
+        if await is_admin(msg):
+            tg_lib.all_mode_off(db, msg['chat']['id'])
+            tmp_settings_keyboard = deepcopy(SETTINGS_KEYBOARD)
+            tmp_settings_keyboard.append([{'text':'🙈 Listen only to commands'
+                                                   if tg_lib.all_mode_check(db, msg['chat']['id'])
+                                                   else '🐵 Listen to all message'}])
 
-        await sendKeyboard(msg['chat']['id'],
-                            f"Mode was changed via @{msg['from'].get('username') or msg['from']['id']} (OFF)",
-                            {'keyboard': tmp_settings_keyboard,
-                             'resize_keyboard': True,
-                             'selective':True })
-
+            await sendKeyboard(msg['chat']['id'],
+                                f"Mode was changed via @{msg['from'].get('username') or msg['from']['id']} (OFF)",
+                                {'keyboard': tmp_settings_keyboard,
+                                 'resize_keyboard': True,
+                                 'selective':True })
+        else:
+            await sendMessage(msg['chat']['id'],
+                                f'Недостаточно прав!\n',
+                                msg['message_id'])
     #commands for admins
     elif msg['chat']['id'] == TG_SHELTER:
         if  command == 'getpromo':

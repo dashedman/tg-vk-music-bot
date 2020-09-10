@@ -190,6 +190,12 @@ def db_put_audio(db, audio_id, telegram_id, audio_size):
         pass
     db.conn.commit()
 
+def db_del_audio(db, audio_id):
+    db.cursor.execute(
+        """DELETE FROM audios WHERE id=?"""
+        ,(audio_id, ))
+    db.conn.commit()
+
 def all_mode_check(db, chat_id):
     db.cursor.execute(
         """SELECT mode FROM chats
