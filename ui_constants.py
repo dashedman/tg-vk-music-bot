@@ -1,11 +1,9 @@
-MAIN_KEYBOARD = [[{'text':'🏃 Go!'}],
-                 [{'text':'👑 Popular'},{'text':'🆕 New songs'}],
+MAIN_KEYBOARD = [[{'text':'👑 Popular'},{'text':'🆕 New songs'}],
                  [{'text':'❓ Help'},{'text':'🔨 Settings'},{'text':'📔 About'}]]
 
 SETTINGS_KEYBOARD = [[{'text':'↩️ Back'}]]
 
-KEYBOARD_COMMANDS = { '🏃 Go!':'quick',
-                      '👑 Popular':'popular',
+KEYBOARD_COMMANDS = { '👑 Popular':'popular',
                       '🆕 New songs':'new_songs',
                       '❓ Help':'help',
                       '🔨 Settings':'settings',
@@ -19,22 +17,21 @@ HELP_TEXT = """❓ Help
 
 🔍 To find music enter '/find [track_title]' or '/f [track_title]' and send it.
 
-🙈 You can enable the 'all listen' mode in /settings.
-🐵 To search music in this mode, you can just enter '[track_title]' and send it.
-
 👑 /popular or /chart to find most popular songs.
 
-🆕 /new_songs to find most popular songs.
+🆕 /new_songs to find novelties songs.
+
+For admins:
+🙈 You can enable the 'all listen' mode in /settings.
+🐵 To search music in this mode, you can just enter '[track_title]' and send it.
 
 /about me c:
 """
 
-QUICK_TEXT = """🏃 Quick!
-Just enter '/f [track_title]' 👇 and i'll try to find it! 🤝"""
-
 ABOUT_TEXT = """📔 About!
 
 📫 For any questions: @dashed_man
+🍰 For donates: https://www.donationalerts.com/r/dashed_man
 
 py3.8"""
 

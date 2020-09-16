@@ -650,9 +650,6 @@ async def command_demon(vk_audio, db, msg, command = None):
     elif command == 'help':
         await sendMessage(msg['chat']['id'], \
                             HELP_TEXT)
-    elif command == 'quick':
-        await sendMessage(msg['chat']['id'], \
-                            QUICK_TEXT)
     elif command == 'about':
         await sendMessage(msg['chat']['id'], \
                             ABOUT_TEXT)
@@ -865,7 +862,7 @@ async def reauth_demon(vk_session, webhook_on, once=False):
     global IS_REAUTH
     while True:
         if not once:
-            await asyncio.sleep(60*60*8)
+            await asyncio.sleep(60*60*48)
         else:
             await sendMessage(TG_SHELTER, f"ReAuth {once=}")
 
