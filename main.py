@@ -88,6 +88,8 @@ MUSIC_LIST_LENGTH = 9
 MUSICLIST_CACHE= {}
 TRACK_CACHE= {}
 IS_DOWNLOAD = set()
+STATISTIC_SIZE = 24
+STATISTIC_DOWNLOAD = deque([[0.0,0.0] for i in range(STATISTIC_SIZE)], STATISTIC_SIZE)
 IS_REAUTH = False
 CONNECT_COUNTER = 0
 AD_COOLDOWN = 128
@@ -436,7 +438,47 @@ async def check_advertisement(db, msg):
         count -= 1
         tg_lib.put_chat_counter(db, msg['chat']['id'], count)
 
+async def update_stat(real_size, ghost_size):
+    last_cols = STATISTIC_DOWNLOAD[-1]
+    last_cols[0] += real_size
+    last_cols[1] += ghost_size
 
+async def get_stat():
+    now_time = time.gmtime()
+    max_data_size = 0.0
+    for x in STATISTIC_DOWNLOAD:
+        if x[1] > max_data_size:
+            max_data_size = x[1]
+
+    head = f"\\^ Max Volume: {max_data_size:.2f}Mb | Time: {now_time.tm_hour}:{now_time.tm_min:02}\n"
+    foot = "+" + "-"*STATISTIC_SIZE + ">"
+
+    graph = [[' ']*STATISTIC_SIZE for i in range(10)]
+
+    if max_data_size > 0.0:
+        for it, val in enumerate(STATISTIC_DOWNLOAD):
+            graph[int(val[1]*9/max_data_size)][it] = '_'
+            for i in range(0,int(val[1]*9/max_data_size)):
+                graph[i][it] = '+'
+
+            for i in range(0,int(val[0]*9/max_data_size)):
+                graph[i][it] = '#'
+
+
+    else:
+        for it, val in enumerate(STATISTIC_DOWNLOAD):
+            graph[0][it] = '_'
+
+    #compile graph
+    pic = head
+    for floor in graph[-1::-1]:
+        pic += "|"
+        for ceil in floor:
+            pic += ceil
+        pic += "\n"
+    pic += foot
+
+    return pic
 #asynchronious workers
 async def workerMsg(vk_audio, db, msg):
     if 'text' in msg:
@@ -476,6 +518,7 @@ async def workerCallback(vk_audio, db, callback):
                                 telegram_id = telegram_id,
                                 caption=f'{audio_size:.2f} MB t\n_via MusicForUs\_bot_'.replace('.','\.'),
                                 parse_mode='markdownv2')
+                await update_stat(0.0, audio_size)
             except:
                 #if telegram clear his cache files
                 tg_lib.db_del_audio(db, audio_id)
@@ -522,6 +565,8 @@ async def workerCallback(vk_audio, db, callback):
                                         performer = html.unescape(new_audio['artist'].replace("$#","&#")),
                                         caption=f'{audio_size:.2f} MB f\n_via MusicForUs\_bot_'.replace('.','\.'),
                                         parse_mode='markdownv2')
+            #update statistic
+            await update_stat(audio_size, audio_size)
 
             #multiline comment
             '''
@@ -675,6 +720,13 @@ async def command_demon(vk_audio, db, msg, command = None):
                                  'resize_keyboard': True,
                                  'selective':True },
                                  replay_message_id = msg['message_id'])
+    elif command == 'get_stat':
+        await sendMessage(
+            msg['chat']['id'],
+            "```\n"+(await get_stat())+"```",
+            disable_web_page_preview=True,
+            parse_mode='markdownv2',
+        )
 
     elif command == 'all_mode_on':
         if await is_admin(msg):
@@ -892,7 +944,16 @@ async def reauth_demon(vk_session, webhook_on, once=False):
         if once:break
 
 
+async def stat_demon():
+    while True:
+        now_time = time.gmtime()
+        half_hour = now_time.tm_min % 30
 
+        if half_hour<=5:
+            STATISTIC_DOWNLOAD.append([0.0, 0.0])
+            await asyncio.sleep((30-half_hour)*60)
+        else:
+            await asyncio.sleep(0)
 #listeners
 #~~flask~~ ~~vibora~~ sanic, requests
 async def WHlistener(vk_session, vk_audio, db):
@@ -950,6 +1011,7 @@ async def WHlistener(vk_session, vk_audio, db):
         ssl = context if SELF_SSL else None
     )
     asyncio.create_task(reauth_demon(vk_session, True))
+    asyncio.create_task(stat_demon())
     asyncio.create_task(server)
 
 
@@ -964,6 +1026,7 @@ async def LPlistener(vk_session, vk_audio, db):
     #start listen
     BOTLOG.info(f"Listening...")
     asyncio.create_task(reauth_demon(vk_session, False))
+    asyncio.create_task(stat_demon())
     while True:
 
         #get new messages
