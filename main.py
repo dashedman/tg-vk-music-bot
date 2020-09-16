@@ -628,17 +628,19 @@ async def command_demon(vk_audio, db, msg, command = None):
     if command == 'start':
         if 'username' in msg['from']:
             await sendKeyboard(msg['chat']['id'], \
-                            f"Keyboard for @{msg['from'].get('username') or msg['from']['id']}",
+                            f"Keyboard for @{msg['from'].get('username')}",
                             {'keyboard': MAIN_KEYBOARD,
                              'resize_keyboard': True,
                              'one_time_keyboard': True,
                              'selective': True})
         else:
             await sendKeyboard(msg['chat']['id'], \
-                            f"Hi!",
+                            f"Keyboard for...",
                             {'keyboard': MAIN_KEYBOARD,
                              'resize_keyboard': True,
-                             'one_time_keyboard': True})
+                             'one_time_keyboard': True,
+                             'selective': True},
+                             replay_message_id = msg['message_id'])
     elif command[:2] == 'f ':
         await seek_and_send(vk_audio, db, msg, command[2:])
     elif command[:5] == 'find ':
@@ -660,12 +662,19 @@ async def command_demon(vk_audio, db, msg, command = None):
             if tg_lib.all_mode_check(db, msg['chat']['id'])
             else '🐵 Listen to all message'
         }])
-
-        await sendKeyboard(msg['chat']['id'],
-                            f"{msg['text']} for @{msg['from'].get('username') or msg['from']['id']}",
-                            {'keyboard': tmp_settings_keyboard,
-                             'resize_keyboard': True,
-                             'selective':True })
+        if 'username' in msg['from']:
+            await sendKeyboard(msg['chat']['id'],
+                                f"{msg['text']} for @{msg['from'].get('username')}",
+                                {'keyboard': tmp_settings_keyboard,
+                                 'resize_keyboard': True,
+                                 'selective':True })
+        else:
+            await sendKeyboard(msg['chat']['id'],
+                                f"{msg['text']} for...",
+                                {'keyboard': tmp_settings_keyboard,
+                                 'resize_keyboard': True,
+                                 'selective':True },
+                                 replay_message_id = msg['message_id'])
 
     elif command == 'all_mode_on':
         if await is_admin(msg):
