@@ -762,6 +762,17 @@ async def command_demon(vk_audio, db, msg, command = None):
             await sendMessage(msg['chat']['id'],
                                 f'Недостаточно прав!\n',
                                 msg['message_id'])
+    elif command == 'startall':
+        if await is_admin(msg):
+            await sendKeyboard(msg['chat']['id'], \
+                            f"Keyboard for all!",
+                            {'keyboard': MAIN_KEYBOARD,
+                             'resize_keyboard': True,
+                             'one_time_keyboard': True})
+        else:
+            await sendMessage(msg['chat']['id'],
+                                f'Недостаточно прав!\n',
+                                msg['message_id'])
     #commands for admins
     elif msg['chat']['id'] == TG_SHELTER:
         if  command == 'getpromo':

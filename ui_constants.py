@@ -1,7 +1,7 @@
 MAIN_KEYBOARD = [[{'text':'👑 Popular'},{'text':'🆕 New songs'}],
                  [{'text':'❓ Help'},{'text':'🔨 Settings'},{'text':'📔 About'},{'text':'📈 Statistic'}]]
 
-SETTINGS_KEYBOARD = [[{'text':'↩️ Back'}]]
+SETTINGS_KEYBOARD = [[{'text':'↩️ Back'},{'text':'⌨️ Review Keyboar'}]]
 
 KEYBOARD_COMMANDS = { '👑 Popular':'popular',
                       '🆕 New songs':'new_songs',
@@ -11,6 +11,7 @@ KEYBOARD_COMMANDS = { '👑 Popular':'popular',
                       '📈 Statistic':'get_stat',
                       '🐵 Listen to all message':'all_mode_on',
                       '🙈 Listen only to commands':'all_mode_off',
+                      '⌨️ Review Keyboar':'startall',
                       '↩️ Back':'start'}
 
 
