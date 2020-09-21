@@ -298,10 +298,24 @@ async def send_error(result, err):
     while True:
         try:
             await sendMessage(TG_SHELTER, f"Поймал чипалах :с\nСоединений: {CONNECT_COUNTER}\nError: {repr(err)}")
+            if 'message' in result:
+                await sendMessage(
+                    result['message']['chat']['id'],
+                    ERROR_TEXT,
+                    replay_message_id = result['message']['message_id']
+                )
+            #callback
+            elif 'callback_query' in result:
+                await workerCallback(vk_audio, db, result)
+                await sendMessage(
+                    result['callback_query']['message']['chat']['id'],
+                    ERROR_TEXT
+                )
         except Exception:
             await asyncio.sleep(60)
         else:
             break
+
 
 async def seek_and_send(vk_audio, db, msg, request = None):
     if not request: request = msg['text']
@@ -479,6 +493,7 @@ async def get_stat():
     pic += foot
 
     return pic
+
 #asynchronious workers
 async def workerMsg(vk_audio, db, msg):
     if 'text' in msg:
@@ -493,7 +508,6 @@ async def workerMsg(vk_audio, db, msg):
             if tg_lib.all_mode_check(db, msg['chat']['id']):
                 BOTLOG.info(f"Message: {msg['text']}")
                 await seek_and_send(vk_audio, db, msg)
-
 
 async def workerCallback(vk_audio, db, callback):
     data = callback['data'].split('@')
@@ -1146,6 +1160,7 @@ def start_bot(WEB_HOOK_FLAG = True):
         db_connect.close()
         loop.close()
         BOTLOG.info(f"Force exit. {err}")
+    finally:
         with open("botlogs.log", "r") as f:
             old_logs = f.read()
         with open("last_botlogs.log", "w") as f:

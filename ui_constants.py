@@ -37,6 +37,7 @@ ABOUT_TEXT = """📔 About!
 
 py3.8"""
 
+ERROR_TEXT = "Что-то сломалось :c"
 WAITING_ANIM_LIST = "|\\-/"
 WAITING_ANIM_LIST2 = "+x"
 
