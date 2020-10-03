@@ -184,7 +184,7 @@ async def sendMessage(chat_id, text, replay_message_id = None, **kwargs):
 
     if not r['ok']:
         if r['error_code'] == 429:
-            await sendMessage(chat_id, f"Слишком много запросов! Пожалуйста повторите через {r['parameters']['retry_after']+5} сек")
+            pass
         else:
             raise Exception(f"bad Message: {r}")
     return r['result']
