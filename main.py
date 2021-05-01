@@ -86,10 +86,12 @@ CONNECT_COUNTER = 0
 
 #classes
 class ThrottlingMiddleware(BaseMiddleware):
-    def __init__(self, database, throttling_rate_limit=DEFAULT_RATE_LIMIT, key_prefix='antiflood_'):
+    def __init__(self, database, throttling_rate_limit=DEFAULT_RATE_LIMIT, silence_cooldown=0, key_prefix='antiflood_'):
         self.rate_limit = throttling_rate_limit
+        self.silence_cooldown = silence_cooldown
         self.prefix = key_prefix
         self.database = database
+
         super(ThrottlingMiddleware, self).__init__()
 
     def set_database(database):
@@ -472,7 +474,7 @@ def start_bot():
     storage = MemoryStorage()
     dispatcher = Dispatcher(bot, storage=storage)
 
-    middleware = ThrottlingMiddleware(database, throttling_rate_limit=4)
+    middleware = ThrottlingMiddleware(database, throttling_rate_limit=1, silence_cooldown=30)
     dispatcher.middleware.setup(middleware)
 
     #============= HANDLERS ============
