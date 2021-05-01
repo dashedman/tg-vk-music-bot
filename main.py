@@ -654,14 +654,12 @@ def start_bot():
 
     @dispatcher.callback_query_handler()
     async def button_handler(callback_query: types.CallbackQuery):
-        LOGGER.info('0')
         args = callback_query.data.split("@")
         command, data = args[0], args[1:]
 
         if command == 'pass': return
 
         if command == 'd': # download audio
-            LOGGER.info('1')
             audio_id = data[0]+'_'+data[1]
 
             await callback_query.message.chat.do('upload_document')
@@ -670,12 +668,10 @@ def start_bot():
 
             CACHED = True
             #check audio in old loads
-            LOGGER.info('2')
             if audio_data := tg_lib.db_get_audio(database, audio_id):
                 telegram_id, audio_size = audio_data
                 #send id from old audio in telegram
                 try:
-                    LOGGER.info('3')
                     await callback_query.message.answer_audio(
                         audio = telegram_id,
                         caption=f'{audio_size:.2f} MB (cached)\n{uic.SIGNATURE}',
@@ -691,7 +687,6 @@ def start_bot():
                 IS_DOWNLOAD.add(audio_id)
 
                 try:
-                    LOGGER.info('4')
                     new_audio = await vk_audio.get_audio_by_id(*data)
                 except:
                     LOGGER.exception(f"vk_audio.get_audio_by_id(*{data})")
@@ -705,12 +700,10 @@ def start_bot():
                         break"""
 
                 #download audio
-                LOGGER.info('5')
                 response = await requests.head(new_audio['url'])
                 audio_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
                 if audio_size >= 50:
                     duration = time.gmtime(new_audio['duration'])
-                    LOGGER.info('6')
                     await callback_query.message.answer(
                         uic.unescape(f"{new_audio['artist']} - {new_audio['title']} ({duration.tm_min}:{duration.tm_sec:02})\nThis audio file size is too large :c")
                     )
@@ -856,29 +849,6 @@ def start_bot():
             on_shutdown=on_shutdown,
             skip_updates=True
         )
-
-
-    try:pass
-    except Exception as err:
-        #Any error should send ping message to developer
-        LOGGER.info(f"я упал :с")
-        while True:
-            try:
-                asyncio.run(sendMessage(CONFIGS['telegram']['dashboard'], "я упал :с"))
-            except Exception:
-                time.sleep(60)
-            else:
-                break
-
-        db_connect.close()
-        loop.close()
-        LOGGER.exception(f"Error ocured {err}")
-        raise(err)
-    except BaseException as err:
-        #Force exit with ctrl+C
-        db_connect.close()
-        loop.close()
-        LOGGER.info(f"Force exit. {err}")
 
 if __name__ == "__main__":
     #if main then start bot
