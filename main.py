@@ -33,7 +33,7 @@ from aiogram.dispatcher.middlewares import BaseMiddleware
 from aiogram.dispatcher import webhook
 from aiogram.utils import markdown as md
 from aiogram.utils.executor import start_polling, start_webhook
-from aiogram.utils.exceptions import MessageNotModified, TelegramAPIError, UserDeactivated, RetryAfter, ChatNotFound, BotBlocked, Throttled
+from aiogram.utils import exceptions
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 
 #vk_api...
@@ -132,11 +132,11 @@ class ThrottlingMiddleware(BaseMiddleware):
         # Use Dispatcher.throttle method.
         try:
             await dispatcher.throttle(key, rate=limit)
-        except Throttled as t:
+        except exceptions.Throttled as t:
             await self.message_throttled(message, t)    # Execute action
             raise CancelHandler()                       # Cancel current handler
 
-    async def message_throttled(self, message: types.Message, throttled: Throttled):
+    async def message_throttled(self, message: types.Message, throttled: exceptions.Throttled):
         """
         Notify user only on first exceed and notify about unlocking only on last exceed
 
@@ -178,7 +178,7 @@ class ThrottlingMiddleware(BaseMiddleware):
         # Use Dispatcher.throttle method.
         try:
             await dispatcher.throttle(key, rate=limit)
-        except Throttled as t:
+        except exceptions.Throttled as t:
             # Execute action
             await self.callback_query_throttled(callback_query, t)
 
@@ -187,7 +187,7 @@ class ThrottlingMiddleware(BaseMiddleware):
 
         LOGGER.info(f"Callback {callback_query.data}")
 
-    async def callback_query_throttled(self, callback_query: types.CallbackQuery, throttled: Throttled):
+    async def callback_query_throttled(self, callback_query: types.CallbackQuery, throttled: exceptions.Throttled):
         """
         Notify user only on first exceed and notify about unlocking only on last exceed
 
@@ -320,7 +320,6 @@ async def caching_list(vk_audio, request):
 
 
 #message demon-worker functions
-
 async def seek_music(vk_audio, database, message, request):
     #seek music in vk
     current_page = 1
@@ -671,18 +670,7 @@ def start_bot():
             if not CACHED:
                 IS_DOWNLOAD.add(audio_id)
 
-                try:
-                    new_audio = await vk_audio.get_audio_by_id(*data)
-                except:
-                    LOGGER.exception(f"vk_audio.get_audio_by_id(*{data})")
-                    raise
-                """while True:
-                    try:
-                        new_audio = await vk_audio.get_audio_by_id(*data)
-                    except ConnectionError:
-                        await asyncio.sleep(1)
-                    else:
-                        break"""
+                new_audio = await vk_audio.get_audio_by_id(*data)
 
                 #download audio
                 response = await requests.head(new_audio['url'])
@@ -768,6 +756,35 @@ def start_bot():
     #end handlers
     demons = []
 
+    async def send_message(user_id: int, text: str, disable_notification: bool = False) -> bool:
+        """
+        Safe messages sender
+
+        :param user_id:
+        :param text:
+        :param disable_notification:
+        :return:
+        """
+        try:
+            await bot.send_message(user_id, text, disable_notification=disable_notification)
+        except exceptions.BotBlocked:
+            log.error(f"Target [ID:{user_id}]: blocked by user")
+        except exceptions.ChatNotFound:
+            log.error(f"Target [ID:{user_id}]: invalid chat ID")
+        except exceptions.RetryAfter as e:
+            log.error(f"Target [ID:{user_id}]: Flood limit is exceeded. Sleep {e.timeout} seconds.")
+            await asyncio.sleep(e.timeout)
+            return await send_message(user_id, text)  # Recursive call
+        except exceptions.UserDeactivated:
+            log.error(f"Target [ID:{user_id}]: user is deactivated")
+        except exceptions.TelegramAPIError:
+            log.exception(f"Target [ID:{user_id}]: failed")
+        except exceptions.BadRequest:
+            log.exception(f"Target [ID:{user_id}]: bad request")
+        else:
+            return True
+        return False
+
     async def on_startup(app):
         if CONFIGS['network'].getboolean('is_webhook'):
             webhook = await bot.get_webhook_info()
@@ -807,7 +824,6 @@ def start_bot():
         await bot.delete_webhook()
         await dispatcher.storage.close()
         await dispatcher.storage.wait_closed()
-        await app['bot'].close()
 
     if CONFIGS['network'].getboolean('is_webhook'):
         app = webhook.get_new_configured_app(dispatcher=dispatcher, path=CONFIGS['network']['path'])
