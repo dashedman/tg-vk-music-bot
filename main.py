@@ -24,8 +24,8 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types.inline_keyboard import InlineKeyboardMarkup, InlineKeyboardButton as IKB
 from aiogram.types.reply_keyboard import ReplyKeyboardMarkup, KeyboardButton as RKB
 from aiogram.dispatcher import DEFAULT_RATE_LIMIT
+from aiogram.dispatcher.filters import AdminFilter, Text, ContentTypeFilter
 from aiogram.dispatcher.filters.builtin import IDFilter
-from aiogram.dispatcher.filters import AdminFilter, Text
 from aiogram.dispatcher.handler import CancelHandler, current_handler
 from aiogram.dispatcher.middlewares import BaseMiddleware
 from aiogram.utils import markdown as md
@@ -410,11 +410,11 @@ async def get_new_songs(vk_audio, database, message):
     return uic.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
 
 async def get_state():
-    with open(CONFIGS['bot']['state_filename'], "r") as f:
+    with open(CONFIGS['bot']['state_filename'], "r", encoding='utf-8') as f:
         return f.read()
 
 async def set_state(new_state):
-    with open(CONFIGS['bot']['state_filename'], "w") as f:
+    with open(CONFIGS['bot']['state_filename'], "w", encoding='utf-8') as f:
         return f.write(new_state)
 
 async def vk_reauth(vk_session, webhook_on):
@@ -450,8 +450,7 @@ def start_bot():
         cur.execute(
             """CREATE TABLE IF NOT EXISTS chats
             (id TEXT PRIMARY KEY,
-            mode BOOL NOT NULL,
-            ad_counter INT NOT NULL DEFAULT 25)""")
+            mode BOOL NOT NULL)""")
 
         # PRINTING TABLES
         #db_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
@@ -474,7 +473,7 @@ def start_bot():
     storage = MemoryStorage()
     dispatcher = Dispatcher(bot, storage=storage)
 
-    middleware = ThrottlingMiddleware(database, throttling_rate_limit=1, silence_cooldown=30)
+    middleware = ThrottlingMiddleware(database, throttling_rate_limit=1.5, silence_cooldown=30)
     dispatcher.middleware.setup(middleware)
 
     #============= HANDLERS ============
@@ -648,11 +647,10 @@ def start_bot():
         #processing command /logs
         raise Exception("My Err C:")
 
-    @dispatcher.message_handler()
+    @dispatcher.message_handler(ContentTypeFilter(["text"]), lambda message: tg_lib.all_mode_check(database, message.chat.id) and message.text[0] != '/')
     async def unknow_cmd(message: types.Message):
-        if message.text[0] != '/' and tg_lib.all_mode_check(database, message.chat.id):
-            message.text = f"/f{(await bot.me).mention} {message.text}"
-            await find_handler(message)
+        message.text = f"/f{(await bot.me).mention} {message.text}"
+        await find_handler(message)
 
     @dispatcher.callback_query_handler()
     async def button_handler(callback_query: types.CallbackQuery):

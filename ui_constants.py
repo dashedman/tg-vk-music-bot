@@ -30,7 +30,7 @@ ADDED = "Succsesfully added!"
 SETTED = "Succsesfully setted!"
 DELETED = "Succsesfully deleted!"
 SENDED = "Succsesfully sent!"
-FINDED = "Найдено!"
+FINDED = "По вашему запросу нашлось"
 
 WAIT = "Please wait..."
 WRONG = "Wrong command("
