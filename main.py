@@ -20,6 +20,8 @@ from functools import partial
 from random import randint
 
 #eternal libs
+from aiohttp import web
+#telegram api
 from aiogram import Bot, Dispatcher, types
 from aiogram.types.inline_keyboard import InlineKeyboardMarkup, InlineKeyboardButton as IKB
 from aiogram.types.reply_keyboard import ReplyKeyboardMarkup, KeyboardButton as RKB
@@ -28,6 +30,7 @@ from aiogram.dispatcher.filters import AdminFilter, Text, ContentTypeFilter
 from aiogram.dispatcher.filters.builtin import IDFilter
 from aiogram.dispatcher.handler import CancelHandler, current_handler
 from aiogram.dispatcher.middlewares import BaseMiddleware
+from aiogram.dispatcher import webhook
 from aiogram.utils import markdown as md
 from aiogram.utils.executor import start_polling, start_webhook
 from aiogram.utils.exceptions import MessageNotModified, TelegramAPIError, UserDeactivated, RetryAfter, ChatNotFound, BotBlocked, Throttled
@@ -310,31 +313,6 @@ async def caching_list(vk_audio, request):
 
 
 #message demon-worker functions
-
-async def send_error(result, err):
-    LOGGER.error(f"Поймал чипалах :с\nСоединений: {CONNECT_COUNTER}")
-    while True:
-        try:
-            await sendMessage(CONFIGS['telegram']['dashboard'], f"Поймал чипалах :с\nСоединений: {CONNECT_COUNTER}\nError: {repr(err)}")
-            if 'message' in result:
-                await sendMessage(
-                    result['message']['chat']['id'],
-                    uic.ERROR,
-                    replay_message_id = result['message']['message_id']
-                )
-            #callback
-            elif 'callback_query' in result:
-                await workerCallback(vk_audio, db, result)
-                await sendMessage(
-                    result['callback_query']['message']['chat']['id'],
-                    uic.ERROR
-                )
-        except Exception:
-            LOGGER.exception('=== CICLE ERROR ===')
-            await asyncio.sleep(60)
-        else:
-            break
-
 
 async def seek_music(vk_audio, database, message, request):
     #seek music in vk
@@ -783,37 +761,28 @@ def start_bot():
     #end handlers
     demons = []
 
-    async def on_startup(dispatcher):
+    async def on_startup(app):
         if CONFIGS['network'].getboolean('is_webhook'):
+            webhook = await bot.get_webhook_info()
+            LOGGER.info("Old webhook:\n"+pformat(webhook.to_python()))
+
             LOGGER.info(f"Setting Webhook...")
-            webhook_url = f"https://{CONFIGS['network']['domen']}:{CONFIGS['network']['port']}{CONFIGS['network']['path']}"
+            webhook_url = f"https://{CONFIGS['network']['domen']}:{CONFIGS['network']['domen_port']}{CONFIGS['network']['path']}"
 
             if CONFIGS['ssl'].getboolean('self'):
-                #create ssl for webhook
-                create_self_signed_cert()
                 with open(os.path.join(CONFIGS['ssl']['dir'], CONFIGS['ssl']['cert_filename']), "rb") as f:
                     await bot.set_webhook(
                         webhook_url,
                         certificate=f
                     )
-
-                context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
-                context.load_cert_chain(
-                    os.path.join(CONFIGS['ssl']['dir'], CONFIGS['ssl']['cert_filename']),
-                    keyfile=os.path.join(CONFIGS['ssl']['dir'], CONFIGS['ssl']['key_filename'])
-                )
-
             else:
                 await bot.set_webhook(webhook_url)
 
             webhook = await bot.get_webhook_info()
-
             LOGGER.info("New webhook:\n"+pformat(webhook.to_python()))
-
             if webhook.url != webhook_url:
                 LOGGER.info(f"WebHook wasn't setted!")
                 Exception("Webhook wasn't setted!")
-
             LOGGER.info(f"WebHook succesful setted!")
 
         LOGGER.info("Starting demons...")
@@ -822,7 +791,7 @@ def start_bot():
         ])
         uic.set_signature((await bot.me).mention)
 
-    async def on_shutdown(dispatcher):
+    async def on_shutdown(app):
         LOGGER.info("Killing demons...")
         for demon in demons:
             demon.cancel()
@@ -831,16 +800,27 @@ def start_bot():
         await bot.delete_webhook()
         await dispatcher.storage.close()
         await dispatcher.storage.wait_closed()
+        await app['bot'].close()
 
     if CONFIGS['network'].getboolean('is_webhook'):
-        start_webhook(
-            dispatcher=dispatcher,
-            webhook_path=CONFIGS['network']['path'],
-            on_startup=on_startup,
-            on_shutdown=on_shutdown,
-            skip_updates=True,
+        app = webhook.get_new_configured_app(dispatcher=dispatcher, path=CONFIGS['network']['path'])
+        app.on_startup.append(on_startup)
+        app.on_shutdown.append(on_shutdown)
+
+        if CONFIGS['ssl'].getboolean('self'):
+            #create ssl for webhook
+            create_self_signed_cert()
+            context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
+            context.load_cert_chain(
+                os.path.join(CONFIGS['ssl']['dir'], CONFIGS['ssl']['cert_filename']),
+                keyfile=os.path.join(CONFIGS['ssl']['dir'], CONFIGS['ssl']['key_filename'])
+            )
+
+        web.run_app(
+            app,
             host=CONFIGS['network']['host'],
             port=CONFIGS['network'].getint('port'),
+            ssl_context=context if CONFIGS['ssl'].getboolean('self') else None
         )
     else:
         start_polling(
