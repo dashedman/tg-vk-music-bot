@@ -632,7 +632,7 @@ def start_bot():
         raise Exception("My Err C:")
 
     @dispatcher.message_handler(ContentTypeFilter(["text"]), lambda message: tg_lib.all_mode_check(database, message.chat.id) and message.text[0] != '/')
-    async def unknow_cmd(message: types.Message):
+    async def text_handler(message: types.Message):
         message.text = f"/f{(await bot.me).mention} {message.text}"
         await find_handler(message)
 
@@ -752,6 +752,7 @@ def start_bot():
     async def error_handler(info, error):
         await bot.send_message(CONFIGS['telegram']['dashboard'], uic.ERROR)
         LOGGER.error(f"\n\n{'='*20} HandlerError[{error}] {'='*20}\n{pformat(info.to_python())}\n")
+        return True
 
     #end handlers
     demons = []
