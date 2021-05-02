@@ -75,6 +75,13 @@ logging.basicConfig(
     format='[%(asctime)s | %(levelname)s] %(name)s: %(message)s',
     datefmt='%a %b %d %H:%M:%S %Y',
     level=CONFIGS['logging'].getint('level'))
+logging.getLogger('aiohttp.access').setLevel(logging.WARNING)
+logging.getLogger('aiohttp.client').setLevel(logging.WARNING)
+logging.getLogger('aiohttp.internal').setLevel(logging.WARNING)
+logging.getLogger('aiohttp.server').setLevel(logging.WARNING)
+logging.getLogger('aiohttp.web').setLevel(logging.WARNING)
+logging.getLogger('aiohttp.websocket').setLevel(logging.WARNING)
+
 LOGGER = logging.getLogger("bot")
 
 #constants
