@@ -8,7 +8,7 @@ import datetime
 
 from urllib.parse import urljoin, urlparse
 from itertools import islice
-from pprint import pprint
+from pprint import pprint, pformat
 
 from bs4 import BeautifulSoup
 
@@ -977,45 +977,48 @@ class AsyncVkAudio(object):
 
         json_response = json.loads(response.text.replace('<!--', ''))
 
+        try:
+            while json_response['payload'][1][1]['playlist']:
 
-        while json_response['payload'][1][1]['playlist']:
-
-            ids = scrap_ids(
-                json_response['payload'][1][1]['playlist']['list']
-            )
-
-            #len(tracks) <= 10
-            if offset_left + len(ids) >= offset:
-                if offset_left < offset:
-                    ids = ids[offset - offset_left:]
-
-                tracks = scrap_tracks(
-                    ids,
-                    self.user_id,
-                    convert_m3u8_links=self.convert_m3u8_links,
-                    http=self._vk.http
+                ids = scrap_ids(
+                    json_response['payload'][1][1]['playlist']['list']
                 )
 
-                if not tracks:
-                    break
+                #len(tracks) <= 10
+                if offset_left + len(ids) >= offset:
+                    if offset_left < offset:
+                        ids = ids[offset - offset_left:]
 
-                async for track in tracks:
-                    yield track
+                    tracks = scrap_tracks(
+                        ids,
+                        self.user_id,
+                        convert_m3u8_links=self.convert_m3u8_links,
+                        http=self._vk.http
+                    )
+
+                    if not tracks:
+                        break
+
+                    async for track in tracks:
+                        yield track
 
 
-            offset_left += len(ids)
+                offset_left += len(ids)
 
-            response = await self._vk.http.post(
-                'https://vk.com/al_audio.php',
-                data={
-                    'al': 1,
-                    'act': 'load_catalog_section',
-                    'section_id': json_response['payload'][1][1]['sectionId'],
-                    'start_from': json_response['payload'][1][1]['nextFrom'],
-                    'offset':100
-                }
-            )
-            json_response = json.loads(response.text.replace('<!--', ''))
+                response = await self._vk.http.post(
+                    'https://vk.com/al_audio.php',
+                    data={
+                        'al': 1,
+                        'act': 'load_catalog_section',
+                        'section_id': json_response['payload'][1][1]['sectionId'],
+                        'start_from': json_response['payload'][1][1]['nextFrom'],
+                        'offset':100
+                    }
+                )
+                json_response = json.loads(response.text.replace('<!--', ''))
+        except TypeError:
+            self.logger.error("\n\nJSON RESPONSE:\n"+pformat(json_response))
+            raise
 
 
     async def get_popular_iter(self,offset=0):
