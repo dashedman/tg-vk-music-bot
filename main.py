@@ -15,7 +15,7 @@ from logging.handlers import RotatingFileHandler
 from configparser import ConfigParser
 from pprint import pprint, pformat
 from collections import namedtuple, deque
-from copy import deepcopy
+
 from functools import partial
 from random import randint
 
@@ -38,14 +38,15 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 
 #vk_api...
 from vk_api import VkApi
-from vk_api.exceptions import AccessDenied
 from async_extend import AsyncVkApi, AsyncVkAudio
-#from vk_api.audio import VkAudio
-from audio import VkAudio
+
+#from vkwave.client import AIOHTTPClient
+#from vkwave.api import API, BotSyncSingleToken, Token
+#from vkwave.api.methods.audio import Audio
 
 #ssl generate lib
 from OpenSSL import crypto
-import requests_async as requests
+#mport requests_async as requests
 
 #internal lib
 import ui_constants as uic
@@ -449,8 +450,12 @@ def start_bot():
         auth_handler=tg_lib.auth_handler, loop = loop
     )
     vk_session.sync_auth()
-    #vk audio class for fetching music
     vk_audio = AsyncVkAudio(vk_session)
+    #vk_client = AIOHTTPClient()
+    #vk_token = BotSyncSingleToken(CONFIGS['vk']['token'])
+    #vk_api_session = API(vk_token, vk_client)
+    #vk_api = vk_api_session.get_context()
+    #vk_audio = vk_api.audio
 
     #create bot
     bot = Bot(token=CONFIGS['telegram']['token'], loop=loop)
@@ -751,7 +756,7 @@ def start_bot():
     @dispatcher.errors_handler()
     async def error_handler(info, error):
         await bot.send_message(CONFIGS['telegram']['dashboard'], uic.ERROR)
-        LOGGER.error(f"\n\n{'='*20} HandlerError[{error}] {'='*20}\n{pformat(info.to_python())}\n")
+        LOGGER.exception(f"\n\n{'='*20} HandlerError[{error}] {'='*20}\n{pformat(info.to_python())}\n")#error
         return True
 
     #end handlers
@@ -815,6 +820,9 @@ def start_bot():
             #asyncio.create_task(reauth_demon(vk_session, True))
         ])
         uic.set_signature((await bot.me).mention)
+
+        #await vk_api.audio.set_user_id((await vk_api.users.get(return_raw_response = True))['response'][0]['id'])
+        #await vk_api.audio.set_client_session(vk_client)
 
     async def on_shutdown(app):
         LOGGER.info("Killing demons...")

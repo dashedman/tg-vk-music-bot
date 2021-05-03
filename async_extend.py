@@ -826,6 +826,8 @@ class AsyncVkAudio(object):
             ids = scrap_ids(
                 response['data'][0]['list']
             )
+            if not ids:
+                break
 
             tracks = scrap_tracks(
                 ids,
@@ -833,9 +835,6 @@ class AsyncVkAudio(object):
                 self._vk.http,
                 convert_m3u8_links=self.convert_m3u8_links
             )
-
-            if not tracks:
-                break
 
             async for i in tracks:
                 yield i
@@ -981,6 +980,8 @@ class AsyncVkAudio(object):
                 ids = scrap_ids(
                     json_response['payload'][1][1]['playlist']['list']
                 )
+                if not ids:
+                    break
 
                 #len(tracks) <= 10
                 if offset_left + len(ids) >= offset:
@@ -993,9 +994,6 @@ class AsyncVkAudio(object):
                         convert_m3u8_links=self.convert_m3u8_links,
                         http=self._vk.http
                     )
-
-                    if not tracks:
-                        break
 
                     async for track in tracks:
                         yield track
@@ -1039,20 +1037,12 @@ class AsyncVkAudio(object):
         )
 
         #len(tracks) <= 10
-        if offset:
-            tracks = scrap_tracks(
-                ids[offset:],
-                self.user_id,
-                convert_m3u8_links=self.convert_m3u8_links,
-                http=self._vk.http
-            )
-        else:
-            tracks = scrap_tracks(
-                ids,
-                self.user_id,
-                convert_m3u8_links=self.convert_m3u8_links,
-                http=self._vk.http
-            )
+        tracks = scrap_tracks(
+            ids[offset:] if offset else ids,
+            self.user_id,
+            convert_m3u8_links=self.convert_m3u8_links,
+            http=self._vk.http
+        )
 
         async for track in tracks:
             yield track
@@ -1113,6 +1103,8 @@ class AsyncVkAudio(object):
             ids = scrap_ids(
                 json_response['payload'][1][1]['playlist']['list']
             )
+            if not ids:
+                break
 
             #len(tracks) <= 10
             if offset_left + len(ids) >= offset:
@@ -1125,9 +1117,6 @@ class AsyncVkAudio(object):
                     convert_m3u8_links=self.convert_m3u8_links,
                     http=self._vk.http
                 )
-
-                if not tracks:
-                    break
 
                 async for track in tracks:
                     yield track
