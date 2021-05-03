@@ -780,7 +780,6 @@ class AsyncVkAudio(object):
         self._vk = vk
         self.user_id = self._vk.loop.run_until_complete(vk.method('users.get'))[0]['id']
         self.convert_m3u8_links = convert_m3u8_links
-        self.logger = logging.getLogger("vkAudio")
 
         set_cookies_from_list(self._vk.http.cookies, self.DEFAULT_COOKIES)
 
@@ -1016,7 +1015,7 @@ class AsyncVkAudio(object):
                 )
                 json_response = json.loads(response.text.replace('<!--', ''))
         except TypeError:
-            self.logger.error("\n\nJSON RESPONSE:\n"+pformat(json_response))
+            self._vk.logger.error("\n\nJSON RESPONSE:\n"+pformat(json_response))
             raise
 
 
