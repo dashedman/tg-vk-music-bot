@@ -46,7 +46,7 @@ from async_extend import AsyncVkApi, AsyncVkAudio
 
 #ssl generate lib
 from OpenSSL import crypto
-#mport requests_async as requests
+import requests_async as requests
 
 #internal lib
 import ui_constants as uic
