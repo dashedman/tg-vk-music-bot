@@ -15,6 +15,7 @@ from logging.handlers import RotatingFileHandler
 from configparser import ConfigParser
 from pprint import pprint, pformat
 from collections import namedtuple, deque
+from copy import deepcopy
 
 from functools import partial
 from random import randint
