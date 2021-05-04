@@ -40,6 +40,7 @@ NOTHING_NEW = "Nothing is new."
 FIND_NO_ARGS = "Please write '/find some text' to seek streams.\nMinimal length of text 3!\nMaximal length of text 30!"
 TOO_SMALL = "Message is to small"
 TOO_BIG = "Слишком большой запрос :с"
+EMPTY = "Ваш запрос пуст. Поcмотрите примеры в /help"
 UNKNOW_CMD = "Unknow command =/\nEnter /help to get list of commands"
 
 
@@ -73,8 +74,8 @@ HELP_TEXT = """❓ Help
 
 /find - искать музыку🔍. Чтобы воспользоватся после команды надо написать название или автора произведения.
 Синоним: /f
-Example: "/find zoom - last dinosaurs"
-Example: "/f zoom - last dinosaurs"
+Пример: "/find zoom - last dinosaurs"
+Пример: "/f zoom - last dinosaurs"
 
 /popular - получить список самых популярных треков.
 Синоним: /chart

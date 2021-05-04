@@ -480,6 +480,9 @@ def start_bot():
         #send finder inline keyboard to user
         command, expression = message.get_full_command()
 
+        if len(expression.encode("utf-8")) == 0:
+            await message.reply(uic.EMPTY)
+            return
         if len(expression.encode("utf-8")) > 59:
             await message.reply(uic.TOO_BIG)
             return
