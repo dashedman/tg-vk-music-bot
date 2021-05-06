@@ -403,23 +403,6 @@ async def set_state(new_state):
     with open(CONFIGS['bot']['state_filename'], "w", encoding='utf-8') as f:
         return f.write(new_state)
 
-async def vk_reauth(vk_session, webhook_on):
-        await sendMessage(TG_SHELTER, f"ReAuth {once=}")
-
-        IS_REAUTH = True
-        LOGGER.info(f"ReAuth {once=}")
-        await vk_session.auth()
-
-        if webhook_on:
-            LOGGER.info(f"ReWebhook")
-            if SELF_SSL:
-                with open(os.path.join(CERT_DIR, CERT_FILE), "rb") as f:
-                    await setWebhook(WEBHOOK_URL, certificate = f)
-            else:
-                await setWebhook(WEBHOOK_URL)
-        LOGGER.info(f"endReAuth {once=}")
-        IS_REAUTH = False
-
 
 #start func
 def start_bot():
@@ -491,6 +474,31 @@ def start_bot():
             await message.reply(uic.NOT_FOUND)
         else:
             await message.reply(uic.FINDED, reply_markup=keyboard, disable_web_page_preview=True)
+
+    @dispatcher.message_handler(commands=["review", "r"], commands_ignore_caption=False, content_types=types.ContentType.ANY)
+    async def review_handler(message: types.Message):
+        #processing command /find
+        #get streams from db
+        #and
+        #construct keyboard
+        command, msg_for_dev = message.get_full_command()
+        if(len(msg_for_dev) < 3):
+            await message.reply(uic.TO_SMALL)
+            return
+
+        try:
+            if(message.reply_to_message is not None):
+                await message.reply_to_message.forward(CONFIGS['telegram']['dashboard'])
+            await message.forward(CONFIGS['telegram']['dashboard'])
+            await bot.send_message(CONFIGS['telegram']['dashboard'], uic.build_review_info(message), parse_mode="html")
+
+            await message.answer(uic.SENDED)
+        except exceptions.BadRequest:
+            await message.answer(uic.FORWARD_ERROR)
+        except:
+            await message.answer(uic.ERROR)
+            raise
+        return
 
     @dispatcher.message_handler(commands=["popular", "chart"])
     @dispatcher.message_handler(FastText(equals=uic.KEYBOARD_COMMANDS["popular"]))
@@ -596,6 +604,31 @@ def start_bot():
         #processing command /viphelp
         await message.reply(uic.VIPHELP_TEXT)
 
+    @dispatcher.message_handler(dashboard_filter, commands=["rep"], commands_ignore_caption=False, content_types=types.ContentType.ANY)
+    async def rep_handler(message: types.Message):
+        #processing command /del caption
+        #get streamers from db
+        #and
+        #construct keyboard
+        command, args = message.get_full_command()
+        args = args.split()
+        chat_id = args[0]
+        rep_msg = ' '.join(args[1:])
+
+        try:
+            await bot.send_message(chat_id, rep_msg)
+        except BotBlocked:
+            await message.answer("Bot blocked by user(")
+        except ChatNotFound:
+            await message.answer("Invalid ID")
+        except UserDeactivated:
+            await message.answer("User is deactivated")
+        except:
+            await message.reply(uic.ERROR)
+            raise
+        else:
+            await message.reply(uic.SENDED)
+
     @dispatcher.message_handler(dashboard_filter, commands=["cache"])
     async def cache_handler(message: types.Message):
         #processing command /cache
@@ -682,19 +715,19 @@ def start_bot():
                 new_audio = await vk_audio.get_audio_by_id(*data)
 
                 #download audio
-                response = await requests.head(new_audio['url'])
+                response = await requests.head(new_audio['URL'])
                 audio_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
                 if audio_size >= 50:
-                    duration = time.gmtime(new_audio['duration'])
+                    duration = time.gmtime(new_audio['DURATION'])
                     await callback_query.message.answer(
-                        uic.unescape(f"{new_audio['artist']} - {new_audio['title']} ({duration.tm_min}:{duration.tm_sec:02})\nThis audio file size is too large :c")
+                        uic.unescape(f"{new_audio['PERFORMER']} - {new_audio['TITLE']} ({duration.tm_min}:{duration.tm_sec:02})\nThis audio file size is too large :c")
                     )
                     IS_DOWNLOAD.discard(audio_id)
                     return
 
                 while True:
                     try:
-                        response = await requests.get(new_audio['url'])
+                        response = await requests.get(new_audio['URL'])
                     except RemoteProtocolError:
                         await bot.send_message(CONFIGS['telegram']['dashboard'], "Cicle Load")
                         await asyncio.sleep(0)
@@ -705,8 +738,8 @@ def start_bot():
                 #send new audio file
                 response = await callback_query.message.answer_audio(
                     audio = response.content,
-                    title = uic.unescape(new_audio['title']),
-                    performer = uic.unescape(new_audio['artist']),
+                    title = uic.unescape(new_audio['TITLE']),
+                    performer = uic.unescape(new_audio['PERFORMER']),
                     caption=f'{audio_size:.2f} MB\n{uic.SIGNATURE}',
                     parse_mode='html'
                 )

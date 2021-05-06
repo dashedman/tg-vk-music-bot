@@ -734,7 +734,7 @@ class AsyncVkAudio(object):
     VkAudio from vk_api.audio
     """
 
-    __slots__ = ('_vk', 'user_id', 'convert_m3u8_links')
+    __slots__ = ('_vk', 'user_id', 'convert_m3u8_links', 'last_request')
 
     DEFAULT_COOKIES = [
         {  # если не установлено, то первый запрос ломается
@@ -776,14 +776,122 @@ class AsyncVkAudio(object):
         }
     ]
 
+    AUDIO_ITEM = [
+    	"ID",          #0
+    	"OWNER_ID",    #1
+    	"URL",         #2
+    	"TITLE",       #3
+    	"PERFORMER",   #4
+    	"DURATION",    #5
+    	"ALBUM_ID",    #6
+        "7",           #7
+    	"AUTHOR_LINK", #8
+    	"LYRICS",      #9
+    	"FLAGS",       #10
+    	"CONTEXT",     #11
+    	"EXTRA",       #12
+    	"HASHES",      #13
+    	"COVER_URL",   #14
+    	"ADS",         #15
+    	"SUBTITLE",    #16
+    	"MAIN_ARTISTS",#17
+    	"FEAT_ARTISTS",#18
+    	"ALBUM",       #19
+    	"TRACK_CODE"   #20
+    ]
+    AUDIO_ITEM_INDEX = {key:index for index, key in enumerate(AUDIO_ITEM)}
+
     def __init__(self, vk, convert_m3u8_links=True):
         self._vk = vk
         self.user_id = self._vk.loop.run_until_complete(vk.method('users.get'))[0]['id']
         self.convert_m3u8_links = convert_m3u8_links
+        self.last_request = 0.0
 
         set_cookies_from_list(self._vk.http.cookies, self.DEFAULT_COOKIES)
 
         self._vk.loop.run_until_complete(self._vk.http.get('https://m.vk.com/'))  # load cookies
+
+    def _scrap_id(self, audios):
+        """ Парсинг id хэшей аудиозаписи из json объекта """
+        ids = []
+        for audio in audios:
+            _, _, actionHash, _, _, URLHash, _ = audio[self.AUDIO_ITEM_INDEX["HASHES"]].split("/")
+
+            full_id = (
+                str(audio[self.AUDIO_ITEM_INDEX["OWNER_ID"]]),
+                str(audio[self.AUDIO_ITEM_INDEX["ID"]]),
+                actionHash,
+                URLHash
+            )
+            if all(full_id):
+                ids.append(full_id)
+        return ids
+
+    def _filter_by_id(self, audios):
+        """ Парсинг id хэшей аудиозаписи из json объекта """
+        lst = []
+        for audio in audios:
+            _, _, actionHash, _, _, URLHash, _ = audio[self.AUDIO_ITEM_INDEX["HASHES"]].split("/")
+
+            if actionHash and URLHash:
+                lst.append(audio)
+        return lst
+
+    def _scrap_json(self, html_page):
+        """ Парсинг списка хэшей ауфдиозаписей новинок или популярных + nextFrom&sesionId """
+
+        find_json_pattern = r"new AudioPage\(.*?(\{.*\})"
+        match = re.search(find_json_pattern, html_page).group(1)
+        return match
+
+    def _wrap_audio(self, raw_audio):
+        try:
+            return {self.AUDIO_ITEM[index]:raw_audio[index] for index in range(len(self.AUDIO_ITEM))}
+        except:
+            self._vk.logger.error(pformat(f"\n\nWRAP:\n\n{raw_audio}"))
+            raise
+
+    async def _al_audio(self, act, **datas):
+        """
+        acts:
+            - section
+            - load_catalog_section
+            - load_section
+            - ad_event
+            - search_stats
+            - reload_audio
+            - listened_data
+            - audio_status
+        """
+
+        response = await self._vk.http.post(
+            'https://vk.com/al_audio.php',
+            data={'al': 1, 'act': act, **datas}
+        )
+        json_response = json.loads(response.text.replace('<!--', ''))
+
+        if json_response['payload'][0] == 0:
+            return json_response
+
+        if not json_response['payload'][1]:
+            raise AccessDenied(
+                f"You don\'t have permissions to browse\'s audio.\n Error code: {json_response['payload'][0]}. Act: {act}\n DATA:\n{pformat(datas)}\nREAL DATA:{pformat({'al': 1, 'act': act, **datas})}\n JSON RESPONSE:\n{pformat(json_response)}\n"
+            )
+
+        if json_response['payload'][0] == 3:
+            await self._vk._vk_login()
+            LOGGER.warning(f"Error code: {json_response['payload'][0]}.\nReAuth")
+
+        response = await self._vk.http.post(
+            'https://vk.com/al_audio.php',
+            data={'al': 1, 'act': act, **datas}
+        )
+        json_response = json.loads(response.text.replace('<!--', ''))
+
+        if json_response['payload'][0] != 0:
+            raise Exception(f"Error code: {json_response['payload'][0]}\n DATA:\n{pformat(datas)}\n")
+
+        return json_response
 
     async def get_iter(self, owner_id=None, album_id=None, access_hash=None):
         """ Получить список аудиозаписей пользователя (по частям)
@@ -907,26 +1015,12 @@ class AsyncVkAudio(object):
         if owner_id is None:
             owner_id = self.user_id
 
-        response = await self._vk.http.post(
-            'https://vk.com/al_audio.php',
-            data={
-                'al': 1,
-                'act': 'section',
-                'claim': 0,
-                'is_layer': 0,
-                'owner_id': owner_id,
-                'section': 'search',
-                'q': q
-            }
+        json_response = await self._al_audio(
+            'section',
+            owner_id=owner_id,
+            section='search',
+            q=q
         )
-        json_response = json.loads(response.text.replace('<!--', ''))
-
-        if not json_response['payload'][1]:
-            raise AccessDenied(
-                'You don\'t have permissions to browse {}\'s audio'.format(
-                    owner_id
-                )
-            )
 
         if json_response['payload'][1][1]['playlists']:
 
@@ -959,60 +1053,38 @@ class AsyncVkAudio(object):
         """
         offset_left = 0
 
-        response = await self._vk.http.post(
-            'https://vk.com/al_audio.php',
-            data={
-                'al': 1,
-                'act': 'section',
-                'claim': 0,
-                'is_layer': 0,
-                'owner_id': self.user_id,
-                'section': 'search',
-                'q': q
-            }
+        json_response = await self._al_audio(
+            'section',
+            owner_id=self.user_id,
+            section='search',
+            q=q
         )
-
-        json_response = json.loads(response.text.replace('<!--', ''))
 
         try:
             while json_response['payload'][1][1]['playlist']:
+                #pprint(json_response['payload'][1][1]['playlist']['list'])
 
-                ids = scrap_ids(
-                    json_response['payload'][1][1]['playlist']['list']
-                )
-                if not ids:
+                list = json_response['payload'][1][1]['playlist']['list']
+
+                clear_list = self._filter_by_id(list)
+                if not clear_list:
                     break
 
-                #len(tracks) <= 10
-                if offset_left + len(ids) >= offset:
+                if offset_left + len(clear_list) >= offset:
                     if offset_left < offset:
-                        ids = ids[offset - offset_left:]
+                        clear_list = clear_list[offset - offset_left:]
 
-                    tracks = scrap_tracks(
-                        ids,
-                        self.user_id,
-                        convert_m3u8_links=self.convert_m3u8_links,
-                        http=self._vk.http
-                    )
+                    for raw_audio in clear_list:
+                        yield self._wrap_audio(raw_audio)
 
-                    async for track in tracks:
-                        yield track
+                offset_left += len(clear_list)
 
-
-                offset_left += len(ids)
-
-                response = await self._vk.http.post(
-                    'https://vk.com/al_audio.php',
-                    data={
-                        'al': 1,
-                        'act': 'load_catalog_section',
-                        'section_id': json_response['payload'][1][1]['sectionId'],
-                        'start_from': json_response['payload'][1][1]['nextFrom'],
-                        'offset':100
-                    }
+                json_response = await self._al_audio(
+                    'load_catalog_section',
+                    section_id=json_response['payload'][1][1]['sectionId'],
+                    start_from=json_response['payload'][1][1]['nextFrom']
                 )
-                json_response = json.loads(response.text.replace('<!--', ''))
-        except TypeError:
+        except (TypeError, IndexError):
             self._vk.logger.error("\n\nJSON RESPONSE:\n"+pformat(json_response))
             raise
 
@@ -1022,7 +1094,7 @@ class AsyncVkAudio(object):
 
         :param offset: смещение
         """
-
+        offset_left = 0
         response = await self._vk.http.post(
             'https://vk.com/audio',
             data={
@@ -1030,23 +1102,43 @@ class AsyncVkAudio(object):
                 'section':'explore'
             }
         )
-        json_response = json.loads(scrap_json(response.text))
+        json_response = json.loads(self._scrap_json(response.text))
+        list = json_response['sectionData']['explore']['playlist']['list']
+        section_id=json_response['sectionData']['explore']['sectionId'],
+        start_from=json_response['sectionData']['explore']['nextFrom']
 
-        ids = scrap_ids(
-            json_response['sectionData']['explore']['playlist']['list']
-        )
+        clear_list = self._filter_by_id(list)
 
-        #len(tracks) <= 10
-        tracks = scrap_tracks(
-            ids[offset:] if offset else ids,
-            self.user_id,
-            convert_m3u8_links=self.convert_m3u8_links,
-            http=self._vk.http
-        )
+        if offset_left + len(clear_list) >= offset:
+            if offset_left < offset:
+                clear_list = clear_list[offset - offset_left:]
 
-        async for track in tracks:
-            yield track
+            for raw_audio in clear_list:
+                yield self._wrap_audio(raw_audio)
 
+        offset_left += len(clear_list)
+
+        while True:
+            json_response = await self._al_audio(
+                'load_catalog_section',
+                section_id=section_id,
+                start_from=start_from
+            )
+            list = json_response['payload'][1][1]['playlist']['list']
+            clear_list = self._filter_by_id(list)
+            if not clear_list:
+                break
+
+            if offset_left + len(clear_list) >= offset:
+                if offset_left < offset:
+                    clear_list = clear_list[offset - offset_left:]
+
+                for raw_audio in clear_list:
+                    yield self._wrap_audio(raw_audio)
+
+            offset_left += len(clear_list)
+            section_id=json_response['payload'][1][1]['sectionId'],
+            start_from=json_response['payload'][1][1]['nextFrom']
 
     async def get_news_iter(self,offset=0):
         """ Искать популярные аудиозаписи  (генератор)
@@ -1063,67 +1155,78 @@ class AsyncVkAudio(object):
                 'section':'explore'
             }
         )
-        json_response = json.loads(scrap_json(response.text))
+        json_response = json.loads(self._scrap_json(response.text))
+        list = json_response['sectionData']['explore']['playlist']['list']
+        section_id=json_response['sectionData']['explore']['sectionId'],
+        start_from=json_response['sectionData']['explore']['nextFrom']
 
-        ids = scrap_ids(
-            json_response['sectionData']['explore']['playlist']['list']
-        )
+        clear_list = self._filter_by_id(list)
+        if not clear_list:
+            return
 
-        #len(tracks) <= 10
-        if offset_left + len(ids) >= offset:
+        if offset_left + len(clear_list) >= offset:
             if offset_left < offset:
-                ids = ids[offset - offset_left:]
+                clear_list = clear_list[offset - offset_left:]
 
-            tracks = scrap_tracks(
-                ids,
-                self.user_id,
-                convert_m3u8_links=self.convert_m3u8_links,
-                http=self._vk.http
-            )
+            for raw_audio in clear_list:
+                yield self._wrap_audio(raw_audio)
 
-            async for track in tracks:
-                yield track
-
-
-        offset_left += len(ids)
+        offset_left += len(clear_list)
 
         while True:
-            response = await self._vk.http.post(
-                'https://vk.com/al_audio.php',
-                data={
-                    'al': 1,
-                    'act': 'load_catalog_section',
-                    'section_id': json_response['sectionData']['explore']['sectionId'],
-                    'start_from': json_response['sectionData']['explore']['nextFrom']
-                }
+            json_response = await self._al_audio(
+                'load_catalog_section',
+                section_id=section_id,
+                start_from=start_from
             )
-
-            json_response = json.loads(response.text.replace('<!--', ''))
-
-            ids = scrap_ids(
-                json_response['payload'][1][1]['playlist']['list']
-            )
-            if not ids:
+            list = json_response['payload'][1][1]['playlist']['list']
+            clear_list = self._filter_by_id(list)
+            if not clear_list:
                 break
 
-            #len(tracks) <= 10
-            if offset_left + len(ids) >= offset:
+            if offset_left + len(clear_list) >= offset:
                 if offset_left < offset:
-                    ids = ids[offset - offset_left:]
+                    clear_list = clear_list[offset - offset_left:]
 
-                tracks = scrap_tracks(
-                    ids,
-                    self.user_id,
-                    convert_m3u8_links=self.convert_m3u8_links,
-                    http=self._vk.http
+                for raw_audio in clear_list:
+                    yield self._wrap_audio(raw_audio)
+
+            offset_left += len(clear_list)
+            section_id=json_response['payload'][1][1]['sectionId'],
+            start_from=json_response['payload'][1][1]['nextFrom']
+
+    async def get_audios_by_full_ids(self, full_ids):
+        """ Получить аудиозапись по ID
+        :param full_ids: [(<ownerID>, <audioID>, <actionHash>, <URLHash>)]
+        """
+
+        #split by 10 audios
+        for ids_group in (full_ids[i:i + 10] for i in range(0, len(full_ids), 10)):
+            delay = RPS_DELAY_RELOAD_AUDIO - (time.time() - self.last_request)
+
+            if delay > 0:
+                await asyncio.sleep(delay)
+
+            json_response = await self._al_audio(
+                'reload_audio',
+                ids=','.join(
+                    ('_'.join(id_tuple) for id_tuple in ids_group)
                 )
+            )
+            last_request = time.time()
 
-                async for track in tracks:
-                    yield track
+            raw_audios = json_response['payload'][1][0]
+            for audio in map(self._wrap_audio, raw_audios):
 
+                link = audio['URL']
+                if 'audio_api_unavailable' in link:
+                    link = decode_audio_url(link, self.user_id)
 
-            offset_left += len(ids)
+                if self.convert_m3u8_links and 'm3u8' in link:
+                    link = RE_M3U8_TO_MP3.sub(r'\1/\2.mp3', link)
+                audio['URL'] = link
 
+                yield audio
 
     async def get_audio_by_id(self, owner_id, audio_id):
         """ Получить аудиозапись по ID
@@ -1140,17 +1243,12 @@ class AsyncVkAudio(object):
             filter_root_el={'class': 'basisDefault'}
         )
 
-        track = scrap_tracks(
-            ids,
-            self.user_id,
-            http=self._vk.http,
-            convert_m3u8_links=self.convert_m3u8_links
-        )
+        audio = self.get_audios_by_full_ids(ids)
 
-        if track:
-            return await track.__anext__()
-        else:
-            return []
+        try:
+            return await audio.__anext__()
+        except StopAsyncIteration:
+            pass
 
 
     async def get_post_audio(self, owner_id, post_id):
@@ -1175,30 +1273,6 @@ class AsyncVkAudio(object):
         )
 
         return tracks
-
-
-def scrap_ids(audio_data):
-    """ Парсинг списка хэшей аудиозаписей из json объекта """
-    ids = []
-
-    for track in audio_data:
-        audio_hashes = track[13].split("/")
-
-        full_id = (
-            str(track[1]), str(track[0]), audio_hashes[2], audio_hashes[5]
-        )
-        if all(full_id):
-            ids.append(full_id)
-
-    return ids
-
-def scrap_json(html_page):
-    """ Парсинг списка хэшей ауфдиозаписей новинок или популярных + nextFrom&sesionId """
-
-    find_json_pattern = r"new AudioPage\(.*?(\{.*\})"
-    match = re.search(find_json_pattern, html_page).group(1)
-
-    return match
 
 
 def scrap_ids_from_html(html, filter_root_el=None):
@@ -1268,14 +1342,14 @@ async def scrap_tracks(ids, user_id, http, convert_m3u8_links=True):
                     link = RE_M3U8_TO_MP3.sub(r'\1/\2.mp3', link)
 
                 yield {
-                    'id': audio[0],
-                    'owner_id': audio[1],
-                    'track_covers': audio[14].split(',') if audio[14] else [],
-                    'url': link,
+                    'ID': audio[0],
+                    'OWNER_ID': audio[1],
+                    'COVER_URL': audio[14].split(',') if audio[14] else [],
+                    'URL': link,
 
-                    'artist': artist,
-                    'title': title,
-                    'duration': duration,
+                    'PERFORMER': artist,
+                    'TITLE': title,
+                    'DURATION': duration,
                 }
 
 
@@ -1312,59 +1386,3 @@ def scrap_albums(html):
         })
 
     return albums
-
-
-class PolyVkAudio():
-    def __init__(self,login=None, password=None, token=None,
-                 auth_handler=None, captcha_handler=None,
-                 config=jconfig.Config, config_filename='vk_config.v2.json',
-                 api_version='5.92', app_id=6222115, scope=DEFAULT_USER_SCOPE,
-                 client_secret=None, session=None, loop = None,
-                 convert_m3u8_links=True,
-                 workers = 1):
-
-        self.wid = -1
-        self.workers_number = workers
-        self.workers = [None] * self.workers_number
-
-        for i in range(sessions_amount):
-            vk_session = AsyncVkApi(login, password, token,
-                         auth_handler, captcha_handler,
-                         config, config_filename,
-                         api_version, app_id, scope,
-                         client_secret, session, loop)
-            vk_session.auth()
-
-            self.workers[i] = AsyncVkAudio(vk_session, convert_m3u8_links)
-
-    async def get_iter(self, owner_id=None, album_id=None, access_hash=None):
-        sefl.wid = (self.wid + 1) % self.workers_number
-        await self.workers[self.wid].get_iter(owner_id, album_id, access_hash)
-
-
-
-if __name__ == "__main__":
-    #just auth
-    pvk_audio = PolyVkAudio("login","password", workers = 5)
-
-    async def test(pvk_audio, bench=1):
-        print(f"Start {time.clock()}")
-
-        task_closed = 0
-        async def task():
-            nonlocal task_closed, pvk_audio
-
-            await pvk_audio.get_iter()
-
-            task_closed += 1
-
-        for i in range(bench):
-            asyncio.create_task(task())
-
-        while task_closed<bench:
-            await asyncio.sleep(0)
-
-        print(f"End {time.clock()}")
-
-
-    asyncio.run(test(pvk_audio))

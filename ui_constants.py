@@ -83,6 +83,11 @@ HELP_TEXT = """❓ Help
 /new_songs - получить список новинок.
 Синоним: /novelties
 
+/review - написать разработчику
+Синоним: /r
+Пример: "/review Привет!"
+Пример: "/r Привет!"
+
 
 Для админов чатов:
 /settings - открыть настройки.
@@ -114,10 +119,10 @@ py3.8"""
 def get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page=1):
     inline_keyboard = []
     for music in musiclist:
-        duration = time.gmtime(music['duration'])
+        duration = time.gmtime(music['DURATION'])
         inline_keyboard.append([IKB(
-            text = html.unescape(f"{music['artist']} - {music['title']} ({duration.tm_min}:{duration.tm_sec:02})".replace("$#","&#")),
-            callback_data = f"d@{music['owner_id']}@{music['id']}"
+            text = html.unescape(f"{music['PERFORMER']} - {music['TITLE']} ({duration.tm_min}:{duration.tm_sec:02})".replace("$#","&#")),
+            callback_data = f"d@{music['OWNER_ID']}@{music['ID']}"
         )])
 
     inline_keyboard.append([])
@@ -139,3 +144,6 @@ def get_hide_keyboard(request, current_page):
         text=SHOW,
         callback_data= f'e@{request}@{current_page}'
     )]])
+
+def build_review_info(message):
+    return f"Review from {md.quote_html(message.from_user.mention)}(user: {md.hcode(message.from_user.id)}, chat: {md.hcode(message.chat.id)}){'[is a bot]' if message.from_user.is_bot else ''}"
