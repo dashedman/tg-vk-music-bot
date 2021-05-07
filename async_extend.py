@@ -880,7 +880,7 @@ class AsyncVkAudio(object):
 
         if json_response['payload'][0] == 3:
             await self._vk._vk_login()
-            LOGGER.warning(f"Error code: {json_response['payload'][0]}.\nReAuth")
+            self._vk.logger.warning(f"Error code: {json_response['payload'][0]}.\nReAuth")
 
         response = await self._vk.http.post(
             'https://vk.com/al_audio.php',
@@ -889,7 +889,9 @@ class AsyncVkAudio(object):
         json_response = json.loads(response.text.replace('<!--', ''))
 
         if json_response['payload'][0] != 0:
-            raise Exception(f"Error code: {json_response['payload'][0]}\n DATA:\n{pformat(datas)}\n")
+            self._vk.logger.error(f"DATA:\n{pformat(datas)}\n")
+            self._vk.logger.error(f"PAYLOAD:\n{pformat(json_response['payload'])}\n")
+            raise Exception(f"Al_Audio Error code: {json_response['payload'][0]}\n")
 
         return json_response
 
