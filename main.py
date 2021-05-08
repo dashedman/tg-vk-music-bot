@@ -137,8 +137,8 @@ class ThrottlingMiddleware(BaseMiddleware):
         except exceptions.Throttled as t:
             await self.message_throttled(message, t)    # Execute action
             raise CancelHandler()                       # Cancel current handler
-            
-        LOGGER.info(f"Message {message.text or message.caption or "!non text!"}")
+
+        LOGGER.info(f"Message {message.text or message.caption or '!non text!'}")
 
     async def message_throttled(self, message: types.Message, throttled: exceptions.Throttled):
         """
