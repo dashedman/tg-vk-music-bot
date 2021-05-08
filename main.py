@@ -802,8 +802,7 @@ def start_bot():
         if error in (
             exceptions.MessageNotModified,
             exceptions.InvalidQueryID
-        )
-        or str(error) in (
+        ) or str(error) in (
             "Replied message not found",
         ):
             LOGGER.warning(f"{'='*3} HandlerError[{error}] {'='*3}")
