@@ -430,8 +430,10 @@ def start_bot():
     #autetifications in vk
     LOGGER.info(f"Vk autentification...")
     vk_session = AsyncVkApi(
-        CONFIGS['vk']['login'], CONFIGS['vk']['password'],
-        auth_handler=tg_lib.auth_handler, loop = loop
+        login=CONFIGS['vk']['login'],
+        password=CONFIGS['vk']['password'],
+        auth_handler=tg_lib.auth_handler,
+        loop = loop
     )
     vk_session.sync_auth()
     vk_audio = AsyncVkAudio(vk_session)
@@ -712,7 +714,8 @@ def start_bot():
             if not CACHED:
                 IS_DOWNLOAD.add(audio_id)
 
-                new_audio = await vk_audio.get_audio_by_id(*data)
+                owner_id, audio_id = data
+                new_audio = await vk_audio.get_audio_by_id(owner_id, audio_id)
 
                 #download audio
                 response = await requests.head(new_audio['URL'])

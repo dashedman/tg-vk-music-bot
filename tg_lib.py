@@ -19,6 +19,8 @@ class DictionaryBomb():
 def auth_handler():
     return input("Key code:"), False
 
+
+
 async def get_music_list(generator, current_page=1, list_length = 1):
     NEXT_PAGE_FLAG = False
     musiclist = []
@@ -30,7 +32,7 @@ async def get_music_list(generator, current_page=1, list_length = 1):
         for i in range(list_length-1):
             try:
                 next_track = await generator.__anext__()
-                if next_track == musiclist[0]:break
+                if next_track['ID'] == musiclist[0]['ID'] and next_track['OWNER_ID'] == musiclist[0]['OWNER_ID']:break
                 musiclist.append(next_track)
             except StopAsyncIteration:
                 break
