@@ -810,7 +810,7 @@ class MyActLock():
         self._is_locked =  False
 
     async def __aenter__(self):
-        while self._is_locked:
+        while self._is_locked or self._rps_delay > (time.time() - self._last_request):
             delay = self._rps_delay - (time.time() - self._last_request)
             if delay > 0:
                 await asyncio.sleep(delay)
@@ -920,7 +920,7 @@ class AsyncVkAudio(object):
             if json_response['payload'][0] == 3:
                 await self._vk.auth()
                 self._vk.logger.warning(f"Error code: {json_response['payload'][0]}. ReAuth")
-                
+
         async with self.lock[act]:
             response = await self._vk.http.post(
                 'https://vk.com/al_audio.php',
@@ -1457,11 +1457,11 @@ if __name__ == "__main__":
 
     loop = asyncio.get_event_loop()
     async def test_lock():
-        lock = MyActLock(0)
+        lock = MyActLock(2)
         async def do_req():
             async with lock:
                 print("enter")
-                await asyncio.sleep(5)
+                await asyncio.sleep(0)
                 print("exit")
 
         await asyncio.gather(
@@ -1469,8 +1469,10 @@ if __name__ == "__main__":
             do_req(),
             do_req()
         )
+        for i in range(3):
+            await do_req()
 
-    """import tg_lib
+    import tg_lib
     from configparser import ConfigParser
     CONFIGS = ConfigParser()
     CONFIGS.read("config.ini")
@@ -1481,7 +1483,7 @@ if __name__ == "__main__":
         loop=loop
     )
     vk_session.sync_auth()
-    vk_audio = AsyncVkAudio(vk_session)"""
+    vk_audio = AsyncVkAudio(vk_session)#"""
 
     async def find_rps():
         def unwrap_audio(audio):
@@ -1492,18 +1494,20 @@ if __name__ == "__main__":
         time_start = time.time()
 
         act = 'reload_audio'
+        lock = MyActLock(RPS_DELAY[act])
         query = await vk_audio.search("lizer", 45)
         for i, audio in enumerate(query):
             raw_audio = unwrap_audio(audio)
             ids = vk_audio._scrap_id([raw_audio])
-            response = await vk_audio._vk.http.post(
-                'https://vk.com/al_audio.php',
-                data={
-                    'al': 1,
-                    'act': act,
-                    'ids':'_'.join(ids[0])
-                }
-            )
+            async with lock:
+                response = await vk_audio._vk.http.post(
+                    'https://vk.com/al_audio.php',
+                    data={
+                        'al': 1,
+                        'act': act,
+                        'ids':'_'.join(ids[0])
+                    }
+                )
             json_response = json.loads(response.text.replace('<!--', ''))
             print(i)
             pprint(json_response, depth = 3)
