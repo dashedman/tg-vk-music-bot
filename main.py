@@ -484,8 +484,12 @@ def start_bot():
         #and
         #construct keyboard
         command, msg_for_dev = message.get_full_command()
+        if(len(msg_for_dev) == 0):
+            await message.reply(uic.EMPTY)
+            return
+
         if(len(msg_for_dev) < 3):
-            await message.reply(uic.TO_SMALL)
+            await message.reply(uic.TOO_SMALL)
             return
 
         try:
@@ -795,8 +799,17 @@ def start_bot():
 
     @dispatcher.errors_handler()
     async def error_handler(info, error):
-        await bot.send_message(CONFIGS['telegram']['dashboard'], uic.ERROR)
-        LOGGER.exception(f"\n\n{'='*20} HandlerError[{error}] {'='*20}\n{pformat(info.to_python())}\n")#error
+        if error in (
+            exceptions.MessageNotModified,
+            exceptions.InvalidQueryID
+        )
+        or str(error) in (
+            "Replied message not found",
+        ):
+            LOGGER.warning(f"{'='*3} HandlerError[{error}] {'='*3}")
+        else:
+            await bot.send_message(CONFIGS['telegram']['dashboard'], uic.ERROR)
+            LOGGER.exception(f"\n\n{'='*20} HandlerError[{error}] {'='*20}\n{pformat(info.to_python())}\n")#error
         return True
 
     #end handlers
