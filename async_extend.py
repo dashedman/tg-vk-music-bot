@@ -890,7 +890,7 @@ class AsyncVkAudio(object):
             raise
 
     async def wait(self):
-        for lock in self.lock:
+        for lock in self.lock.values():
             await lock.wait()
 
     async def _al_audio(self, act, **datas):

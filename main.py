@@ -801,7 +801,7 @@ def start_bot():
 
     @dispatcher.errors_handler()
     async def error_handler(info, error):
-        if error in (
+        if type(error) in (
             exceptions.MessageNotModified,
             exceptions.InvalidQueryID
         ) or str(error) in (
