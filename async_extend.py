@@ -808,8 +808,10 @@ class MyActLock():
         self._rps_delay = rps_delay
         self._last_request = 0.0
         self._is_locked =  False
+        self._counter = 0
 
     async def __aenter__(self):
+        self._counter += 1
         while self._is_locked or self._rps_delay > (time.time() - self._last_request):
             delay = self._rps_delay - (time.time() - self._last_request)
             if delay > 0:
@@ -822,6 +824,11 @@ class MyActLock():
 
     async def __aexit__(self, exc_type, exc, tb):
         self._is_locked = False
+        self._counter -= 1
+
+    async def wait(self):
+        while self._is_locked and self._counter != 0:
+            await asyncio.sleep(0)
 
 class AsyncVkAudio(object):
     """
@@ -881,6 +888,10 @@ class AsyncVkAudio(object):
         except:
             self._vk.logger.error(pformat(f"\n\nWRAP:\n\n{raw_audio}"))
             raise
+
+    async def wait(self):
+        for lock in self.lock:
+            await lock.wait()
 
     async def _al_audio(self, act, **datas):
         """

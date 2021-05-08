@@ -137,6 +137,8 @@ class ThrottlingMiddleware(BaseMiddleware):
         except exceptions.Throttled as t:
             await self.message_throttled(message, t)    # Execute action
             raise CancelHandler()                       # Cancel current handler
+            
+        LOGGER.info(f"Message {message.text or message.caption or "!non text!"}")
 
     async def message_throttled(self, message: types.Message, throttled: exceptions.Throttled):
         """
@@ -882,9 +884,12 @@ def start_bot():
             demon.cancel()
         LOGGER.info("All demons was killed.")
 
+        await vk_audio.wait()
+
         await bot.delete_webhook()
         await dispatcher.storage.close()
         await dispatcher.storage.wait_closed()
+
 
     if CONFIGS['network'].getboolean('is_webhook'):
         app = webhook.get_new_configured_app(dispatcher=dispatcher, path=CONFIGS['network']['path'])
