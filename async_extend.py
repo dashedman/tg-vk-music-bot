@@ -923,6 +923,8 @@ class AsyncVkAudio(object):
             if json_response['payload'][0] == 0:
                 return json_response
 
+            self._vk.logger.warning(f"Error code: {json_response['payload'][0]}")
+
             if not json_response['payload'][1]:
                 raise AccessDenied(
                     f"You don\'t have permissions to browse\'s audio.\n Error code: {json_response['payload'][0]}. Act: {act}\n DATA:\n{pformat(datas)}\nREAL DATA:{pformat({'al': 1, 'act': act, **datas})}\n JSON RESPONSE:\n{pformat(json_response)}\n"
@@ -930,7 +932,6 @@ class AsyncVkAudio(object):
 
             if json_response['payload'][0] == 3:
                 await self._vk.auth()
-                self._vk.logger.warning(f"Error code: {json_response['payload'][0]}. ReAuth")
 
         async with self.lock[act]:
             response = await self._vk.http.post(
@@ -940,9 +941,11 @@ class AsyncVkAudio(object):
         json_response = json.loads(response.text.replace('<!--', ''))
 
         if json_response['payload'][0] != 0:
-            self._vk.logger.error(f"DATA:\n{pformat(datas)}\n")
-            self._vk.logger.error(f"PAYLOAD:\n{pformat(json_response['payload'])}\n")
-            raise Exception(f"Al_Audio Error code: {json_response['payload'][0]}\n")
+            sid_valid = await self._vk.check_sid()
+            self._vk.logger.error(f"Remixsid is valid: {sid_valid}")
+            self._vk.logger.error(f"DATA:\n{pformat(datas)}")
+            self._vk.logger.error(f"PAYLOAD:\n{pformat(json_response['payload'])}")
+            raise Exception(f"Al_Audio Error code: {json_response['payload'][0]}")
 
         return json_response
 
@@ -1472,7 +1475,8 @@ if __name__ == "__main__":
         async def do_req():
             async with lock:
                 print("enter")
-                await asyncio.sleep(0)
+                await asyncio.sleep(2)
+                raise Exception('test raise')
                 print("exit")
 
         await asyncio.gather(
