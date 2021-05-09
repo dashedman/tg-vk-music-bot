@@ -915,7 +915,7 @@ class AsyncVkAudio(object):
                     data={'al': 1, 'act': act, **datas}
                 )
         except ProtocolError:
-            await self._vk.auth()
+            await self._vk.auth(reauth=True)
             self._vk.logger.warning(f"ProtocolError. ReAuth")
         else:
             json_response = json.loads(response.text.replace('<!--', ''))
@@ -931,7 +931,7 @@ class AsyncVkAudio(object):
                 )
 
             if json_response['payload'][0] == 3:
-                await self._vk.auth()
+                await self._vk.auth(reauth=True)
 
         async with self.lock[act]:
             response = await self._vk.http.post(
