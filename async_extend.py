@@ -904,6 +904,11 @@ class AsyncVkAudio(object):
             - reload_audio
             - listened_data
             - audio_status
+
+        payload error codes:
+            0 - ok
+            3 - ??? (reauth to fix)
+            8 - too much requests
         """
 
         #delay lock
@@ -920,7 +925,7 @@ class AsyncVkAudio(object):
         else:
             json_response = json.loads(response.text.replace('<!--', ''))
 
-            if json_response['payload'][0] == 0:
+            if int(json_response['payload'][0]) == 0:
                 return json_response
 
             self._vk.logger.warning(f"Error code: {json_response['payload'][0]}")
@@ -930,7 +935,7 @@ class AsyncVkAudio(object):
                     f"You don\'t have permissions to browse\'s audio.\n Error code: {json_response['payload'][0]}. Act: {act}\n DATA:\n{pformat(datas)}\nREAL DATA:{pformat({'al': 1, 'act': act, **datas})}\n JSON RESPONSE:\n{pformat(json_response)}\n"
                 )
 
-            if json_response['payload'][0] == 3:
+            if int(json_response['payload'][0]) == 3:
                 await self._vk.auth(reauth=True)
 
         async with self.lock[act]:
@@ -940,7 +945,7 @@ class AsyncVkAudio(object):
             )
         json_response = json.loads(response.text.replace('<!--', ''))
 
-        if json_response['payload'][0] != 0:
+        if int(json_response['payload'][0]) != 0:
             sid_valid = await self._vk.check_sid()
             self._vk.logger.error(f"Remixsid is valid: {sid_valid}")
             self._vk.logger.error(f"DATA:\n{pformat(datas)}")
