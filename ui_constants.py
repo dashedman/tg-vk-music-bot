@@ -42,6 +42,7 @@ TOO_SMALL = "Message is to small"
 TOO_BIG = "Слишком большой запрос :с"
 EMPTY = "Ваш запрос пуст. Поcмотрите примеры в /help"
 UNKNOW_CMD = "Unknow command =/\nEnter /help to get list of commands"
+NO_ACCESS = "Недостаточно прав!"
 
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(keyboard=[

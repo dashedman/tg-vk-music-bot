@@ -27,7 +27,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.types.inline_keyboard import InlineKeyboardMarkup, InlineKeyboardButton as IKB
 from aiogram.types.reply_keyboard import ReplyKeyboardMarkup, KeyboardButton as RKB
 from aiogram.dispatcher import DEFAULT_RATE_LIMIT
-from aiogram.dispatcher.filters import AdminFilter, Text, ContentTypeFilter
+from aiogram.dispatcher.filters import AdminFilter, Text, ContentTypeFilter, ChatTypeFilter
 from aiogram.dispatcher.filters.builtin import IDFilter
 from aiogram.dispatcher.handler import CancelHandler, current_handler
 from aiogram.dispatcher.middlewares import BaseMiddleware
@@ -566,8 +566,12 @@ def start_bot():
             )
 
     admin_filter = AdminFilter()
+    private_chat_filter = ChatTypeFilter(types.chat.ChatType.PRIVATE)
+
     @dispatcher.message_handler(admin_filter, commands=["all_mode_on"])
     @dispatcher.message_handler(admin_filter, FastText(equals=uic.KEYBOARD_COMMANDS["all_mode_on"]))
+    @dispatcher.message_handler(private_chat_filter, commands=["all_mode_on"])
+    @dispatcher.message_handler(private_chat_filter, FastText(equals=uic.KEYBOARD_COMMANDS["all_mode_on"]))
     async def all_mode_on_handler(message: types.Message):
         #processing command /about
         tg_lib.all_mode_on(database, message.chat.id)
@@ -586,6 +590,8 @@ def start_bot():
 
     @dispatcher.message_handler(admin_filter, commands=["all_mode_off"])
     @dispatcher.message_handler(admin_filter, FastText(equals=uic.KEYBOARD_COMMANDS["all_mode_off"]))
+    @dispatcher.message_handler(private_chat_filter, commands=["all_mode_off"])
+    @dispatcher.message_handler(private_chat_filter, FastText(equals=uic.KEYBOARD_COMMANDS["all_mode_off"]))
     async def all_mode_off_handler(message: types.Message):
         #processing command /about
         tg_lib.all_mode_off(database, message.chat.id)
@@ -601,6 +607,15 @@ def start_bot():
             reply_markup=ReplyKeyboardMarkup(
                 keyboard=tmp_settings_keyboard,
                 resize_keyboard=True, one_time_keyboard=True, selective=True))
+
+    @dispatcher.message_handler(commands=["all_mode_on", "all_mode_off"])
+    @dispatcher.message_handler(
+        FastText(equals=[
+            uic.KEYBOARD_COMMANDS["all_mode_on"],
+            uic.KEYBOARD_COMMANDS["all_mode_off"]
+        ]))
+    async def no_admin_handler(message: types.Message):
+        await message.reply(uic.NO_ACCESS)
 
     dashboard_filter = IDFilter(chat_id=CONFIGS['telegram']['dashboard'])
     @dispatcher.message_handler(dashboard_filter, commands=["vipinfo"])
