@@ -567,7 +567,7 @@ def start_bot():
 
     admin_filter = AdminFilter()
     @dispatcher.message_handler(admin_filter, commands=["all_mode_on"])
-    @dispatcher.message_handler(FastText(equals=uic.KEYBOARD_COMMANDS["all_mode_on"]))
+    @dispatcher.message_handler(admin_filter, FastText(equals=uic.KEYBOARD_COMMANDS["all_mode_on"]))
     async def all_mode_on_handler(message: types.Message):
         #processing command /about
         tg_lib.all_mode_on(database, message.chat.id)
@@ -585,7 +585,7 @@ def start_bot():
                 resize_keyboard=True, one_time_keyboard=True, selective=True))
 
     @dispatcher.message_handler(admin_filter, commands=["all_mode_off"])
-    @dispatcher.message_handler(FastText(equals=uic.KEYBOARD_COMMANDS["all_mode_off"]))
+    @dispatcher.message_handler(admin_filter, FastText(equals=uic.KEYBOARD_COMMANDS["all_mode_off"]))
     async def all_mode_off_handler(message: types.Message):
         #processing command /about
         tg_lib.all_mode_off(database, message.chat.id)
