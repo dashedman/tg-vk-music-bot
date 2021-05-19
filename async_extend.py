@@ -6,7 +6,7 @@ import threading
 import time
 import datetime
 
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, parse_qs, unquote
 from itertools import islice
 from pprint import pprint, pformat
 
@@ -507,8 +507,20 @@ class AsyncVkApi(object):
                 response = await self.http.get(url)
 
         if 'access_token' in response.url:
-            params = response.url.split('#', 1)[1].split('&')
-            token = dict(param.split('=', 1) for param in params)
+            parsed_url = urlparse(response.url)
+            parsed_query = parse_qs(parsed_url.query)
+
+            if 'authorize_url' in parsed_query:
+                parsed_url = urlparse(unquote(parsed_query['authorize_url'][0]))
+
+            parsed_query = parse_qs(parsed_url.fragment)
+
+            token = {k: v[0] for k, v in parsed_query.items()}
+
+            if not isinstance(token.get('access_token'), str):
+                raise AuthError(get_unknown_exc_str('API AUTH; no access_token'))
+            #params = response.url.split('#', 1)[1].split('&')
+            #token = dict(param.split('=', 1) for param in params)
 
             self.token = token
 
