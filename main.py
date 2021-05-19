@@ -706,60 +706,77 @@ def start_bot():
         args = callback_query.data.split("@")
         command, data = args[0], args[1:]
 
+
         if command == 'pass': return
 
         if command == 'd': # download audio
-            audio_id = data[0]+'_'+data[1]
+            full_audio_id = data[0]+'_'+data[1]
 
             await callback_query.message.chat.do('upload_document')
-            while audio_id in IS_DOWNLOAD:
+            while full_audio_id in IS_DOWNLOAD:
+
                 await asyncio.sleep(0.07)
 
             CACHED = True
+
             #check audio in old loads
-            if audio_data := tg_lib.db_get_audio(database, audio_id):
+            if audio_data := tg_lib.db_get_audio(database, full_audio_id):
+
                 telegram_id, audio_size = audio_data
                 #send id from old audio in telegram
                 try:
+
                     await callback_query.message.answer_audio(
                         audio = telegram_id,
                         caption=f'{audio_size:.2f} MB (cached)\n{uic.SIGNATURE}',
                         parse_mode='html'
                     )
+
                 except:
                     #if telegram clear his cache files
-                    tg_lib.db_del_audio(database, audio_id)
+
+                    tg_lib.db_del_audio(database, full_audio_id)
             else:
+
                 CACHED = False
 
             if not CACHED:
-                IS_DOWNLOAD.add(audio_id)
+
+                IS_DOWNLOAD.add(full_audio_id)
+
 
                 owner_id, audio_id = data
                 new_audio = await vk_audio.get_audio_by_id(owner_id, audio_id)
 
                 #download audio
+
                 response = await requests.head(new_audio['URL'])
+
                 audio_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
                 if audio_size >= 50:
                     duration = time.gmtime(new_audio['DURATION'])
                     await callback_query.message.answer(
                         uic.unescape(f"{new_audio['PERFORMER']} - {new_audio['TITLE']} ({duration.tm_min}:{duration.tm_sec:02})\nThis audio file size is too large :c")
                     )
-                    IS_DOWNLOAD.discard(audio_id)
+                    IS_DOWNLOAD.discard(full_audio_id)
                     return
+
 
                 while True:
                     try:
+
                         response = await requests.get(new_audio['URL'])
+
                     except RemoteProtocolError:
                         await bot.send_message(CONFIGS['telegram']['dashboard'], "Cicle Load")
                         await asyncio.sleep(0)
                     else:
+
                         break
 
 
                 #send new audio file
+
                 response = await callback_query.message.answer_audio(
                     audio = response.content,
                     title = uic.unescape(new_audio['TITLE']),
@@ -768,12 +785,14 @@ def start_bot():
                     parse_mode='html'
                 )
 
+
                 #save new audio in db
                 tg_lib.db_put_audio( database, \
-                                      audio_id, \
+                                      full_audio_id, \
                                       response['audio']['file_id'],
                                       audio_size)
-                IS_DOWNLOAD.discard(audio_id)
+
+                IS_DOWNLOAD.discard(full_audio_id)
 
         if command == 'e':
 
