@@ -425,6 +425,14 @@ def start_bot():
             (id TEXT PRIMARY KEY,
             mode BOOL NOT NULL)""")
 
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS audios
+            (
+                id          TEXT PRIMARY KEY,
+                telegram_id TEXT UNIQUE NOT NULL,
+                audio_size  REAL        NOT NULL
+            )""")
+
         # PRINTING TABLES
         #db_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         #LOGGER.info("TABLES:")
