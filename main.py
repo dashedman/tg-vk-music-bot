@@ -7,6 +7,7 @@ import argparse
 import json
 import sys
 import os
+import io
 import html
 import ssl
 import logging
@@ -122,6 +123,7 @@ class ThrottlingMiddleware(BaseMiddleware):
         # Cheking to outdated
         if time.time() - message.date.timestamp() > 5*60:
             LOGGER.info("Skip outdated command!")
+            raise CancelHandler()
 
         # If handler was configured, get rate limit and key from handler
         if handler:
@@ -774,14 +776,17 @@ def start_bot():
 
                         break
 
-
                 #send new audio file
-
+                pprint(response.headers)
                 response = await callback_query.message.answer_audio(
-                    audio = response.content,
+                    audio = types.InputFile(
+                        io.BytesIO(response.content),
+                        filename=f"{new_audio['PERFORMER'][:32]}_{new_audio['TITLE'][:32]}.mp3"
+                    ),
                     title = uic.unescape(new_audio['TITLE']),
                     performer = uic.unescape(new_audio['PERFORMER']),
                     caption=f'{audio_size:.2f} MB\n{uic.SIGNATURE}',
+                    duration=new_audio['DURATION'],
                     parse_mode='html'
                 )
 

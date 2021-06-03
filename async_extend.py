@@ -1178,7 +1178,7 @@ class AsyncVkAudio(object):
         response = await self._vk.http.post(
             'https://vk.com/audio',
             data={
-                'block':'chart',
+                'block':'tracks_chart',
                 'section':'explore'
             }
         )
