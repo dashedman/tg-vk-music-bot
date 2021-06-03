@@ -777,7 +777,6 @@ def start_bot():
                         break
 
                 #send new audio file
-                pprint(response.headers)
                 response = await callback_query.message.answer_audio(
                     audio = types.InputFile(
                         io.BytesIO(response.content),
