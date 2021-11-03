@@ -33,7 +33,8 @@ async def get_music_list(generator, current_page=1, list_length = 1):
         for i in range(list_length-1):
             try:
                 next_track = next(generator)
-                if next_track['ID'] == musiclist[0]['ID'] and next_track['OWNER_ID'] == musiclist[0]['OWNER_ID']:break
+                if next_track['id'] == musiclist[0]['id'] and next_track['owner_id'] == musiclist[0]['owner_id']:
+                    break
                 musiclist.append(next_track)
             except StopIteration:
                 break
@@ -71,7 +72,8 @@ def db_del_audio(db, audio_id):
     with db:
         db.cursor().execute(
             """DELETE FROM audios WHERE id=?"""
-            ,(audio_id, ))
+            , (audio_id, ))
+
 
 def all_mode_check(db, chat_id):
     with db:
@@ -84,8 +86,8 @@ def all_mode_check(db, chat_id):
         if answer == None:
             cur.execute(
                 """INSERT INTO chats
-                VALUES (?,?,?)"""
-                , (chat_id, False, 25))
+                VALUES (?,?)"""
+                , (chat_id, False))
             answer = (False,)
     return bool(answer[0])
 

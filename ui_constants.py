@@ -120,10 +120,10 @@ py3.8"""
 def get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page=1):
     inline_keyboard = []
     for music in musiclist:
-        duration = time.gmtime(music['DURATION'])
+        duration = time.gmtime(music['duration'])
         inline_keyboard.append([IKB(
-            text = html.unescape(f"{music['PERFORMER']} - {music['TITLE']} ({duration.tm_min}:{duration.tm_sec:02})".replace("$#","&#")),
-            callback_data = f"d@{music['OWNER_ID']}@{music['ID']}"
+            text = html.unescape(f"{music['artist']} - {music['title']} ({duration.tm_min}:{duration.tm_sec:02})".replace("$#","&#")),
+            callback_data = f"d@{music['owner_id']}@{music['id']}"
         )])
 
     inline_keyboard.append([])

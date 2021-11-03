@@ -373,7 +373,8 @@ async def get_popular(vk_audio, database, message):
     else:
         while True:
             try:
-                res_generator = vk_audio.get_popular_iter()
+                loop = asyncio.get_running_loop()
+                res_generator = await loop.run_in_executor(None, vk_audio.get_popular_iter)
                 musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
             except ConnectionError:
                 await asyncio.sleep(1)
@@ -398,7 +399,8 @@ async def get_new_songs(vk_audio, database, message):
     else:
         while True:
             try:
-                res_generator = vk_audio.get_news_iter()
+                loop = asyncio.get_running_loop()
+                res_generator = await loop.run_in_executor(None, vk_audio.get_news_iter)
                 musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
             except ConnectionError:
                 await asyncio.sleep(1)
@@ -770,18 +772,19 @@ def start_bot():
                 IS_DOWNLOAD.add(full_audio_id)
 
                 owner_id, audio_id = data
-                new_audio = vk_audio.get_audio_by_id(owner_id, audio_id)
+                loop = asyncio.get_running_loop()
+                new_audio = await loop.run_in_executor(None, vk_audio.get_audio_by_id, owner_id, audio_id)
 
                 # download audio
 
-                response = await requests.head(new_audio['URL'])
+                response = await requests.head(new_audio['url'])
 
                 audio_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
                 if audio_size >= 50:
-                    duration = time.gmtime(new_audio['DURATION'])
+                    duration = time.gmtime(new_audio['duration'])
                     await callback_query.message.answer(
                         uic.unescape(
-                            f"{new_audio['PERFORMER']} - {new_audio['TITLE']} ({duration.tm_min}:{duration.tm_sec:02})\nThis audio file size is too large :c")
+                            f"{new_audio['artist']} - {new_audio['title']} ({duration.tm_min}:{duration.tm_sec:02})\nThis audio file size is too large :c")
                     )
                     IS_DOWNLOAD.discard(full_audio_id)
                     return
@@ -789,7 +792,7 @@ def start_bot():
                 while True:
                     try:
 
-                        response = await requests.get(new_audio['URL'])
+                        response = await requests.get(new_audio['url'])
 
                     except RemoteProtocolError:
                         await bot.send_message(CONFIGS['telegram']['dashboard'], "Cicle Load")
@@ -802,12 +805,12 @@ def start_bot():
                 response = await callback_query.message.answer_audio(
                     audio=types.InputFile(
                         io.BytesIO(response.content),
-                        filename=f"{new_audio['PERFORMER'][:32]}_{new_audio['TITLE'][:32]}.mp3"
+                        filename=f"{new_audio['artist'][:32]}_{new_audio['title'][:32]}.mp3"
                     ),
-                    title=uic.unescape(new_audio['TITLE']),
-                    performer=uic.unescape(new_audio['PERFORMER']),
+                    title=uic.unescape(new_audio['title']),
+                    performer=uic.unescape(new_audio['artist']),
                     caption=f'{audio_size:.2f} MB\n{uic.SIGNATURE}',
-                    duration=new_audio['DURATION'],
+                    duration=new_audio['duration'],
                     parse_mode='html'
                 )
 
