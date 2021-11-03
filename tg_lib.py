@@ -86,8 +86,8 @@ def all_mode_check(db, chat_id):
         if answer == None:
             cur.execute(
                 """INSERT INTO chats
-                VALUES (?,?)"""
-                , (chat_id, False))
+                VALUES (?,?,?)"""
+                , (chat_id, False, None))
             answer = (False,)
     return bool(answer[0])
 
@@ -102,8 +102,8 @@ def all_mode_on(db, chat_id):
         except sqlite3.IntegrityError:
             db.cursor().execute(
                 """INSERT INTO chats
-                VALUES (?,?)"""
-                , (chat_id, True))
+                VALUES (?,?,?)"""
+                , (chat_id, True, None))
 
 def all_mode_off(db, chat_id):
     with db:
@@ -116,5 +116,5 @@ def all_mode_off(db, chat_id):
         except sqlite3.IntegrityError:
             db.cursor().execute(
                 """INSERT INTO chats
-                VALUES (?,?)"""
-                , (chat_id, False))
+                VALUES (?,?,?)"""
+                , (chat_id, False, None))

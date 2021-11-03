@@ -437,7 +437,8 @@ def start_bot():
         cur.execute(
             """CREATE TABLE IF NOT EXISTS chats
             (id TEXT PRIMARY KEY,
-            mode BOOL NOT NULL)""")
+            mode BOOL NOT NULL,
+            ad_counter INT NOT NULL DEFAULT 25)""")
 
         cur.execute(
             """CREATE TABLE IF NOT EXISTS audios
