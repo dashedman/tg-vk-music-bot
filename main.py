@@ -43,7 +43,9 @@ from aiogram.contrib.fsm_storage.memory import MemoryStorage
 # vk_api...
 from h11 import RemoteProtocolError
 from vk_api import VkApi
-from vk_api.audio import VkAudio
+# TODO: do a normal push to vk_api
+# from vk_api.audio import VkAudio
+from audio import VkAudio
 # from async_extend import AsyncVkApi, AsyncVkAudio
 
 # from vkwave.client import AIOHTTPClient
@@ -527,7 +529,7 @@ def start_bot():
 
             await message.answer(uic.SENDED)
         except exceptions.BadRequest:
-            await message.answer(uic.FORWARD_ERROR)
+            await message.answer(uic.ERROR)
         except Exception:
             await message.answer(uic.ERROR)
             raise
@@ -745,31 +747,32 @@ def start_bot():
             while full_audio_id in IS_DOWNLOAD:
                 await asyncio.sleep(0.07)
 
+            # cached flag
             CACHED = True
-
             # check audio in old loads
             if audio_data := tg_lib.db_get_audio(database, full_audio_id):
-
                 telegram_id, audio_size = audio_data
                 # send id from old audio in telegram
-                try:
-
-                    await callback_query.message.answer_audio(
-                        audio=telegram_id,
-                        caption=f'{audio_size:.2f} MB (cached)\n{uic.SIGNATURE}',
-                        parse_mode='html'
-                    )
-
-                except:
-                    # if telegram clear his cache files
-
+                if audio_size == 0:
+                    # delete if file is empty
                     tg_lib.db_del_audio(database, full_audio_id)
+                    CACHED = False
+                else:
+                    try:
+                        await callback_query.message.answer_audio(
+                            audio=telegram_id,
+                            caption=f'{audio_size:.2f} MB (cached)\n{uic.SIGNATURE}',
+                            parse_mode='html'
+                        )
+                    except:
+                        # if telegram clear his cache files or file is broken
+                        tg_lib.db_del_audio(database, full_audio_id)
             else:
 
                 CACHED = False
 
             if not CACHED:
-
+                # set lock on downloading this track
                 IS_DOWNLOAD.add(full_audio_id)
 
                 owner_id, audio_id = data
@@ -781,18 +784,34 @@ def start_bot():
                 response = await requests.head(new_audio['url'])
 
                 audio_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
+
                 if audio_size >= 50:
                     duration = time.gmtime(new_audio['duration'])
                     await callback_query.message.answer(
                         uic.unescape(
-                            f"{new_audio['artist']} - {new_audio['title']} ({duration.tm_min}:{duration.tm_sec:02})\nThis audio file size is too large :c")
+                            f"{new_audio['artist']} - {new_audio['title']} "
+                            f"({duration.tm_min}:{duration.tm_sec:02})\n"
+                            f"This audio file size is too large :c"
+                        )
                     )
                     IS_DOWNLOAD.discard(full_audio_id)
                     return
 
+                elif audio_size == 0:
+                    duration = time.gmtime(new_audio['duration'])
+                    await callback_query.message.answer(
+                        uic.unescape(
+                            f"{new_audio['artist']} - {new_audio['title']} "
+                            f"({duration.tm_min}:{duration.tm_sec:02})\n"
+                            f"This audio file is empty :c"
+                        )
+                    )
+                    IS_DOWNLOAD.discard(full_audio_id)
+                    raise Exception(f'Empty file\n{pformat(new_audio)}')
+
+
                 while True:
                     try:
-
                         response = await requests.get(new_audio['url'])
 
                     except RemoteProtocolError:
@@ -874,7 +893,9 @@ def start_bot():
         ):
             LOGGER.warning(f"{'=' * 3} HandlerError[{error}] {'=' * 3}")
         else:
-            await bot.send_message(CONFIGS['telegram']['dashboard'], uic.ERROR)
+            await bot.send_message(
+                CONFIGS['telegram']['dashboard'],
+                f'{uic.ERROR}\n{error}')
             LOGGER.exception(f"\n\n{'=' * 20} HandlerError[{error}] {'=' * 20}\n{pformat(info.to_python())}\n")  # error
         return True
 
@@ -930,9 +951,9 @@ def start_bot():
             webhook = await bot.get_webhook_info()
             LOGGER.info("New webhook:\n" + pformat(webhook.to_python()))
             if webhook.url != webhook_url:
-                LOGGER.info(f"WebHook wasn't setted!")
-                Exception("Webhook wasn't setted!")
-            LOGGER.info(f"WebHook succesful setted!")
+                LOGGER.info(f"WebHook wasn't set!")
+                Exception("Webhook wasn't set!")
+            LOGGER.info(f"WebHook successful set!")
 
         LOGGER.info("Starting demons...")
         demons.extend([
