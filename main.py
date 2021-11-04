@@ -807,7 +807,8 @@ def start_bot():
                         )
                     )
                     IS_DOWNLOAD.discard(full_audio_id)
-                    raise Exception(f'Empty file\n{pformat(new_audio)}')
+                    LOGGER.warning(f'Empty file\n{pformat(new_audio)}')
+                    return
 
 
                 while True:
