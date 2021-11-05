@@ -82,11 +82,11 @@ def all_mode_check(db, chat_id):
             WHERE id=?"""
             , (chat_id, ))
         answer = cur.fetchone()
-        if answer == None:
+        if answer is None:
             cur.execute(
                 """INSERT INTO chats
-                VALUES (?,?,?)"""
-                , (chat_id, False, None))
+                VALUES (?,?)"""
+                , (chat_id, False,))
             answer = (False,)
     return bool(answer[0])
 

@@ -898,10 +898,10 @@ def start_bot():
         ):
             LOGGER.warning(f"{'=' * 3} HandlerError[{error}] {'=' * 3}")
         else:
+            LOGGER.exception(f"\n\n{'=' * 20} HandlerError[{error}] {'=' * 20}\n{pformat(info.to_python())}\n")  #
             await bot.send_message(
                 CONFIGS['telegram']['dashboard'],
                 f'{uic.ERROR}\n{error}')
-            LOGGER.exception(f"\n\n{'=' * 20} HandlerError[{error}] {'=' * 20}\n{pformat(info.to_python())}\n")  # error
         return True
 
     # end handlers
@@ -928,10 +928,10 @@ def start_bot():
             return await send_message(user_id, text)  # Recursive call
         except exceptions.UserDeactivated:
             LOGGER.error(f"Target [ID:{user_id}]: user is deactivated")
-        except exceptions.TelegramAPIError:
-            LOGGER.exception(f"Target [ID:{user_id}]: failed")
         except exceptions.BadRequest:
             LOGGER.exception(f"Target [ID:{user_id}]: bad request")
+        except exceptions.TelegramAPIError:
+            LOGGER.exception(f"Target [ID:{user_id}]: failed")
         else:
             return True
         return False

@@ -896,7 +896,7 @@ class AsyncVkAudio(object):
 
     def _wrap_audio(self, raw_audio):
         try:
-            return {AUDIO_ITEM[index]:raw_audio[index] for index in range(len(AUDIO_ITEM))}
+            return {AUDIO_ITEM[index]: raw_audio[index] for index in range(len(AUDIO_ITEM))}
         except:
             self._vk.logger.error(pformat(f"\n\nWRAP:\n\n{raw_audio}"))
             raise
@@ -1169,7 +1169,7 @@ class AsyncVkAudio(object):
             raise
 
 
-    async def get_popular_iter(self,offset=0):
+    async def get_popular_iter(self, offset=0):
         """ Искать популярные аудиозаписи  (генератор)
 
         :param offset: смещение
@@ -1184,8 +1184,8 @@ class AsyncVkAudio(object):
         )
         json_response = json.loads(self._scrap_json(response.text))
         list = json_response['sectionData']['explore']['playlist']['list']
-        section_id=json_response['sectionData']['explore']['sectionId'],
-        start_from=json_response['sectionData']['explore']['nextFrom']
+        section_id = json_response['sectionData']['explore']['sectionId'],
+        start_from = json_response['sectionData']['explore']['nextFrom']
 
         clear_list = self._filter_by_id(list)
 
