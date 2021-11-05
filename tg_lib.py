@@ -36,10 +36,9 @@ async def get_music_list(generator, current_page=1, list_length = 1):
                 if next_track['id'] == musiclist[0]['id'] and next_track['owner_id'] == musiclist[0]['owner_id']:
                     break
                 musiclist.append(next_track)
+                await asyncio.sleep(0)
             except StopIteration:
                 break
-
-
         else:
             try:
                  next(generator)

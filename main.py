@@ -309,7 +309,8 @@ def get_cache(cache, key, current_page):
 
 
 async def caching_list(vk_audio, request):
-    if request in MUSICLIST_CACHE: return
+    if request in MUSICLIST_CACHE:
+        return
     # bomb on 5 minutes
     bomb = DictionaryBomb(MUSICLIST_CACHE, request, time.time() + 60 * 5)
 
@@ -327,8 +328,10 @@ async def caching_list(vk_audio, request):
     for i in range(98):
         try:
             next_track = next(generator)
-            if next_track == musiclist[0]: break
+            if next_track == musiclist[0]:
+                break
             musiclist.append(next_track)
+            await asyncio.sleep(0)
         except StopIteration:
             break
 
@@ -358,7 +361,8 @@ async def seek_music(vk_audio, database, message, request):
         if not musiclist:
             return None
 
-        if NEXT_PAGE_FLAG: asyncio.create_task(caching_list(vk_audio, request))
+        if NEXT_PAGE_FLAG:
+            asyncio.create_task(caching_list(vk_audio, request))
     # construct inline keyboard for list
     return uic.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
 
