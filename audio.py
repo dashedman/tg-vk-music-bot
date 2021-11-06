@@ -401,6 +401,12 @@ class VkAudio(object):
 
         json_response = json.loads(response.text.replace('<!--', ''))
 
+        try:
+            json_response['payload'][1][1]['playlist']
+        except TypeError:
+            self._vk.logger.error(pformat(json_response['payload']))
+            raise
+
         while json_response['payload'][1] and json_response['payload'][1][1]['playlist']:
 
             ids = scrap_ids(
