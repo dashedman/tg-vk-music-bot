@@ -8,8 +8,10 @@ class DictionaryBomb():
         self.timer = timer
         self.dict = dict
         self.key = key
+
     def replant(self, timer):
         self.timer = timer
+
     async def plant(self):
         while self.timer >= time.time():
             await asyncio.sleep(0)
