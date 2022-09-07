@@ -22,6 +22,10 @@ from functools import partial
 from random import randint
 
 # eternal libs
+from aiogram import types
+from aiogram.dispatcher import webhook
+from aiogram.dispatcher.filters import Text
+from aiogram.utils import exceptions
 from aiohttp import web
 
 # vk_api...
@@ -32,7 +36,6 @@ from h11 import RemoteProtocolError
 # from vkwave.api.methods.audio import Audio
 
 # ssl generate lib
-from OpenSSL import crypto
 import requests_async as requests
 
 # internal lib
@@ -130,7 +133,6 @@ class MusicBot(BaseBot):
         # self.database loading
         self.logger.info(f"Database loading...")
         self.database = sqlite3.connect(self.config['data-base']['host'])
-
         # all_mode table
         with self.database:
             cur = self.database.cursor()
@@ -155,14 +157,120 @@ class MusicBot(BaseBot):
             #    self.logger.info(f"\t{table[0]}")
 
         # COMPONENTS
-        self.vk = VkComponent(self.config['vk'])
-        self.telegram = TelegramComponent(self.config['telegram'])
+        self.vk = VkComponent(self.config['vk'], self.logger)
+        self.telegram = TelegramComponent(self.config['telegram'], self.logger)
+
+        self.demons = []
+
+    async def send_message(self, user_id: int, text: str, disable_notification: bool = False) -> bool:
+        """
+        Safe messages sender
+
+        :param user_id:
+        :param text:
+        :param disable_notification:
+        :return:
+        """
+        try:
+            await self.telegram.bot.send_message(user_id, text, disable_notification=disable_notification)
+        except exceptions.BotBlocked:
+            self.logger.error(f"Target [ID:{user_id}]: blocked by user")
+        except exceptions.ChatNotFound:
+            self.logger.error(f"Target [ID:{user_id}]: invalid chat ID")
+        except exceptions.RetryAfter as e:
+            self.logger.error(f"Target [ID:{user_id}]: Flood limit is exceeded. Sleep {e.timeout} seconds.")
+            await asyncio.sleep(e.timeout)
+            return await self.send_message(user_id, text)  # Recursive call
+        except exceptions.UserDeactivated:
+            self.logger.error(f"Target [ID:{user_id}]: user is deactivated")
+        except exceptions.BadRequest:
+            self.logger.exception(f"Target [ID:{user_id}]: bad request")
+        except exceptions.TelegramAPIError:
+            self.logger.exception(f"Target [ID:{user_id}]: failed")
+        else:
+            return True
+        return False
+
+    async def on_startup(self, app):
+        if self.config['network'].getboolean('is_webhook'):
+            webhook = await self.telegram.bot.get_webhook_info()
+            self.logger.info("Old webhook:\n" + pformat(webhook.to_python()))
+
+            self.logger.info(f"Setting Webhook...")
+            webhook_url = f"https://{self.config['network']['domen']}:{self.config['network']['domen_port']}{self.config['network']['path']}"
+
+            if self.config['ssl'].getboolean('self'):
+                with open(os.path.join(self.config['ssl']['dir'], self.config['ssl']['cert_filename']), "rb") as f:
+                    await self.telegram.bot.set_webhook(
+                        webhook_url,
+                        certificate=f
+                    )
+            else:
+                await self.telegram.bot.set_webhook(webhook_url)
+
+            webhook = await self.telegram.bot.get_webhook_info()
+            self.logger.info("New webhook:\n" + pformat(webhook.to_python()))
+            if webhook.url != webhook_url:
+                self.logger.info(f"WebHook wasn't set!")
+                Exception("Webhook wasn't set!")
+            self.logger.info(f"WebHook successful set!")
+
+        self.logger.info("Starting demons...")
+        self.demons.extend([
+            # asyncio.create_task(reauth_demon(self.vk.session, True))
+        ])
+        uic.set_signature((await self.telegram.bot.me).mention)
+
+        # await vk_api.audio.set_user_id((await vk_api.users.get(return_raw_response = True))['response'][0]['id'])
+        # await vk_api.audio.set_client_session(vk_client)
+
+    async def on_shutdown(self, app):
+        self.logger.info("Killing demons...")
+        for demon in self.demons:
+            demon.cancel()
+        self.logger.info("All demons was killed.")
+
+        await self.telegram.bot.delete_webhook()
+        await self.telegram.dispatcher.storage.close()
+        await self.telegram.dispatcher.storage.wait_closed()
 
     def start(self):
+        self.initialize_handlers()
+
+        if self.config['network'].getboolean('is_webhook'):
+            app = webhook.get_new_configured_app(dispatcher=self.telegram.dispatcher, path=self.config['network']['path'])
+            app.on_startup.append(self.on_startup)
+            app.on_shutdown.append(self.on_shutdown)
+
+            context = None
+            if self.config['ssl'].getboolean('self'):
+                # create ssl for webhook
+                self.create_self_signed_cert()
+                context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
+                context.load_cert_chain(
+                    os.path.join(self.config['ssl']['dir'], self.config['ssl']['cert_filename']),
+                    keyfile=os.path.join(self.config['ssl']['dir'], self.config['ssl']['key_filename'])
+                )
+
+            web.run_app(
+                app,
+                host=self.config['network']['host'],
+                port=self.config['network'].getint('port'),
+                ssl_context=context
+            )
+        else:
+            start_polling(
+                dispatcher=dispatcher,
+                on_startup=on_startup,
+                on_shutdown=on_shutdown,
+                skip_updates=True
+            )
+
+    def initialize_handlers(self):
         dispatcher = self.telegram.dispatcher
         # ============= HANDLERS ============
         @dispatcher.message_handler(commands=["start"])
-        @dispatcher.message_handler(FastText(equals=uic.KEYBOARD_COMMANDS["start"]))
+        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["start"]))
         async def start_handler(message: types.Message):
             # processing command /start
             # send keyboard to user
@@ -585,109 +693,6 @@ class MusicBot(BaseBot):
                     f'{uic.ERROR}\n{error}')
             return True
 
-        # end handlers
-        demons = []
-
-        async def send_message(user_id: int, text: str, disable_notification: bool = False) -> bool:
-            """
-            Safe messages sender
-
-            :param user_id:
-            :param text:
-            :param disable_notification:
-            :return:
-            """
-            try:
-                await bot.send_message(user_id, text, disable_notification=disable_notification)
-            except exceptions.BotBlocked:
-                self.logger.error(f"Target [ID:{user_id}]: blocked by user")
-            except exceptions.ChatNotFound:
-                self.logger.error(f"Target [ID:{user_id}]: invalid chat ID")
-            except exceptions.RetryAfter as e:
-                self.logger.error(f"Target [ID:{user_id}]: Flood limit is exceeded. Sleep {e.timeout} seconds.")
-                await asyncio.sleep(e.timeout)
-                return await send_message(user_id, text)  # Recursive call
-            except exceptions.UserDeactivated:
-                self.logger.error(f"Target [ID:{user_id}]: user is deactivated")
-            except exceptions.BadRequest:
-                self.logger.exception(f"Target [ID:{user_id}]: bad request")
-            except exceptions.TelegramAPIError:
-                self.logger.exception(f"Target [ID:{user_id}]: failed")
-            else:
-                return True
-            return False
-
-        async def on_startup(app):
-            if self.config['network'].getboolean('is_webhook'):
-                webhook = await self.telegram.bot.get_webhook_info()
-                self.logger.info("Old webhook:\n" + pformat(webhook.to_python()))
-
-                self.logger.info(f"Setting Webhook...")
-                webhook_url = f"https://{self.config['network']['domen']}:{self.config['network']['domen_port']}{self.config['network']['path']}"
-
-                if self.config['ssl'].getboolean('self'):
-                    with open(os.path.join(self.config['ssl']['dir'], self.config['ssl']['cert_filename']), "rb") as f:
-                        await self.telegram.bot.set_webhook(
-                            webhook_url,
-                            certificate=f
-                        )
-                else:
-                    await self.telegram.bot.set_webhook(webhook_url)
-
-                webhook = await self.telegram.bot.get_webhook_info()
-                self.logger.info("New webhook:\n" + pformat(webhook.to_python()))
-                if webhook.url != webhook_url:
-                    self.logger.info(f"WebHook wasn't set!")
-                    Exception("Webhook wasn't set!")
-                self.logger.info(f"WebHook successful set!")
-
-            self.logger.info("Starting demons...")
-            demons.extend([
-                # asyncio.create_task(reauth_demon(self.vk.session, True))
-            ])
-            uic.set_signature((await self.telegram.bot.me).mention)
-
-            # await vk_api.audio.set_user_id((await vk_api.users.get(return_raw_response = True))['response'][0]['id'])
-            # await vk_api.audio.set_client_session(vk_client)
-
-        async def on_shutdown(app):
-            self.logger.info("Killing demons...")
-            for demon in demons:
-                demon.cancel()
-            self.logger.info("All demons was killed.")
-
-            await self.telegram.bot.delete_webhook()
-            await dispatcher.storage.close()
-            await dispatcher.storage.wait_closed()
-
-        if self.config['network'].getboolean('is_webhook'):
-            app = webhook.get_new_configured_app(dispatcher=dispatcher, path=self.config['network']['path'])
-            app.on_startup.append(on_startup)
-            app.on_shutdown.append(on_shutdown)
-
-            context = None
-            if self.config['ssl'].getboolean('self'):
-                # create ssl for webhook
-                create_self_signed_cert()
-                context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
-                context.load_cert_chain(
-                    os.path.join(self.config['ssl']['dir'], self.config['ssl']['cert_filename']),
-                    keyfile=os.path.join(self.config['ssl']['dir'], self.config['ssl']['key_filename'])
-                )
-
-            web.run_app(
-                app,
-                host=self.config['network']['host'],
-                port=self.config['network'].getint('port'),
-                ssl_context=context
-            )
-        else:
-            start_polling(
-                dispatcher=dispatcher,
-                on_startup=on_startup,
-                on_shutdown=on_shutdown,
-                skip_updates=True
-            )
 
 
 if __name__ == "__main__":
