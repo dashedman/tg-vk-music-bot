@@ -10,7 +10,6 @@ import os
 import io
 import html
 import ssl
-import logging
 
 from dataclasses import dataclass
 from logging.handlers import RotatingFileHandler
@@ -24,30 +23,9 @@ from random import randint
 
 # eternal libs
 from aiohttp import web
-# telegram api
-from aiogram import Bot, Dispatcher, types
-from aiogram.types.inline_keyboard import InlineKeyboardMarkup, InlineKeyboardButton as IKB
-from aiogram.types.reply_keyboard import ReplyKeyboardMarkup, KeyboardButton as RKB
-from aiogram.dispatcher import DEFAULT_RATE_LIMIT
-from aiogram.dispatcher.filters import AdminFilter, Text, ContentTypeFilter, ChatTypeFilter
-from aiogram.dispatcher.filters.builtin import IDFilter
-from aiogram.dispatcher.handler import CancelHandler, current_handler
-from aiogram.dispatcher.middlewares import BaseMiddleware
-from aiogram.dispatcher import webhook
-from aiogram.utils import markdown as md
-from aiogram.utils.executor import start_polling, start_webhook
-from aiogram.utils import exceptions
-from aiogram.utils.exceptions import BotBlocked, ChatNotFound, UserDeactivated
-
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
 
 # vk_api...
 from h11 import RemoteProtocolError
-from vk_api import VkApi
-# TODO: do a normal push to vk_api
-# from vk_api.audio import VkAudio
-from audio import VkAudio
-# from async_extend import AsyncVkApi, AsyncVkAudio
 
 # from vkwave.client import AIOHTTPClient
 # from vkwave.api import API, BotSyncSingleToken, Token
@@ -60,182 +38,12 @@ import requests_async as requests
 # internal lib
 import ui_constants as uic
 import tg_lib
+from root.components.telegram import TelegramComponent
+from root.components.vk import VkComponent
 from tg_lib import DictionaryBomb
 
 
-# classes
-class ThrottlingMiddleware(BaseMiddleware):
-    def __init__(self, database, throttling_rate_limit=DEFAULT_RATE_LIMIT, silence_cooldown=0, key_prefix='antiflood_'):
-        self.rate_limit = throttling_rate_limit
-        self.silence_cooldown = silence_cooldown
-        self.prefix = key_prefix
-        self.database = database
-        self.logger = logging.getLogger('Throttle')
-
-        super(ThrottlingMiddleware, self).__init__()
-
-    def set_database(self, database):
-        self.database = database
-
-    async def on_process_message(self, message: types.Message, data: dict):
-        """
-        This handler is called when dispatcher receives a message
-        :param message:
-        """
-
-        # Get current handler and dispatcher from context
-        handler = current_handler.get()
-        dispatcher = Dispatcher.get_current()
-
-        # Cheking to outdated
-        if time.time() - message.date.timestamp() > 5 * 60:
-            self.logger.info("Skip outdated command!")
-            raise CancelHandler()
-
-        # If handler was configured, get rate limit and key from handler
-        if handler:
-            limit = getattr(handler, 'throttling_rate_limit', self.rate_limit)
-            key = getattr(handler, 'throttling_key', f"{self.prefix}_{handler.__name__}")
-        else:
-            limit = self.rate_limit
-            key = f"{self.prefix}_message"
-
-        # Use Dispatcher.throttle method.
-        try:
-            await dispatcher.throttle(key, rate=limit)
-        except exceptions.Throttled as t:
-            await self.message_throttled(message, t)  # Execute action
-            raise CancelHandler()  # Cancel current handler
-
-        self.logger.info(f"Message {message.text or message.caption or '!non text!'}")
-
-    async def message_throttled(self, message: types.Message, throttled: exceptions.Throttled):
-        """
-        Notify user only on first exceed and notify about unlocking only on last exceed
-
-        :param message:
-        :param throttled:
-        """
-        handler = current_handler.get()
-        dispatcher = Dispatcher.get_current()
-        if handler:
-            key = getattr(handler, 'throttling_key', f"{self.prefix}_{handler.__name__}")
-        else:
-            key = f"{self.prefix}_message"
-
-        # Prevent flooding
-        if throttled.exceeded_count == 2:
-            await message.reply(f"Don't flood.\nSilence for {throttled.rate} sec.")
-        elif throttled.exceeded_count >= 2:
-            pass
-
-    async def on_process_callback_query(self, callback_query: types.CallbackQuery, data: dict):
-        """
-        This handler is called when dispatcher receives a callback_query
-
-        :param callback_query:
-        """
-        # Get current handler
-        handler = current_handler.get()
-
-        # Get dispatcher from context
-        dispatcher = Dispatcher.get_current()
-        # If handler was configured, get rate limit and key from handler
-        if handler:
-            limit = getattr(handler, 'throttling_rate_limit', self.rate_limit)
-            key = getattr(handler, 'throttling_key', f"{self.prefix}_{handler.__name__}_{callback_query.data}")
-        else:
-            limit = self.rate_limit
-            key = f"{self.prefix}_callback_query_{callback_query.data}"
-
-        # Use Dispatcher.throttle method.
-        try:
-            await dispatcher.throttle(key, rate=limit)
-        except exceptions.Throttled as t:
-            # Execute action
-            await self.callback_query_throttled(callback_query, t)
-
-            # Cancel current handler
-            raise CancelHandler()
-
-        self.logger.info(f"Callback {callback_query.data}")
-
-    async def callback_query_throttled(self, callback_query: types.CallbackQuery, throttled: exceptions.Throttled):
-        """
-        Notify user only on first exceed and notify about unlocking only on last exceed
-
-        :param callback_query:
-        :param throttled:
-        """
-        handler = current_handler.get()
-        dispatcher = Dispatcher.get_current()
-        if handler:
-            key = getattr(handler, 'throttling_key', f"{self.prefix}_{handler.__name__}_{callback_query.data}")
-        else:
-            key = f"{self.prefix}_callback_query_{callback_query.data}"
-
-        # Prevent flooding
-        if throttled.exceeded_count == 2:
-            await callback_query.answer(f"Don't flood. Please wait for {throttled.rate} sec.", show_alert=False)
-        elif throttled.exceeded_count >= 2:
-            pass
-
-
-class FastText(Text):
-    def __init__(self,
-                 equals=None,
-                 contains=None,
-                 startswith=None,
-                 endswith=None,
-                 ignore_case=False):
-
-        super().__init__(equals, contains, startswith, endswith, ignore_case)
-        if self.ignore_case:
-            _pre_process_func = (lambda s: str(s).lower())
-        else:
-            _pre_process_func = str
-
-        self.equals = set(map(_pre_process_func, self.equals)) if self.equals is not None else None
-        self.contains = tuple(map(_pre_process_func, self.contains)) if self.contains is not None else None
-        self.startswith = tuple(map(_pre_process_func, self.startswith)) if self.startswith is not None else None
-        self.endswith = tuple(map(_pre_process_func, self.endswith)) if self.endswith is not None else None
-
-    async def check(self, obj):  # obj: types.Union[Message, CallbackQuery, types.InlineQuery, types.Poll]
-        if isinstance(obj, types.Message):
-            text = obj.text or obj.caption or ''
-            if not text and obj.poll:
-                text = obj.poll.question
-        elif isinstance(obj, types.CallbackQuery):
-            text = obj.data
-        elif isinstance(obj, types.InlineQuery):
-            text = obj.query
-        elif isinstance(obj, types.Poll):
-            text = obj.question
-        else:
-            return False
-
-        if self.ignore_case:
-            text = text.lower()
-
-        # now check
-        if self.equals is not None:
-            return text in self.equals
-
-        if self.contains is not None:
-            return all(map(text.__contains__, self.contains))
-
-        if self.startswith is not None:
-            return any(map(text.startswith, self.startswith))
-
-        if self.endswith is not None:
-            return any(map(text.endswith, self.endswith))
-
-        return False
-
-
 # function
-
-
 # message demon-worker functions
 
 async def get_popular(self.vk.audio, self.database, message):
@@ -346,28 +154,9 @@ class MusicBot(BaseBot):
             # for table in db_cursor.fetchall():
             #    self.logger.info(f"\t{table[0]}")
 
-        # autetifications in vk
-        self.logger.info("Vk autentification...")
-        vk_session = VkApi(
-            login=self.config['vk']['login'],
-            password=self.config['vk']['password'],
-            auth_handler=tg_lib.auth_handler
-        )
-        vk_session.http.headers['User-agent'] = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0) Gecko/20100101 Firefox/94.0'
-        vk_session.auth(token_only=True)
-
-        vk_audio = VkAudio(vk_session)
-        self.vk = VkHandler(vk_session, vk_audio)
-
-        # autetifications in tg
-        self.logger.info("Telegram autentification...")
-        bot = Bot(token=self.config['telegram']['token'])
-        storage = MemoryStorage()
-        dispatcher = Dispatcher(bot, storage=storage)
-
-        middleware = ThrottlingMiddleware(self.database, throttling_rate_limit=1.5, silence_cooldown=30)
-        dispatcher.middleware.setup(middleware)
-        self.telegram = TelegramHandler(bot, dispatcher)
+        # COMPONENTS
+        self.vk = VkComponent(self.config['vk'])
+        self.telegram = TelegramComponent(self.config['telegram'])
 
     def start(self):
         dispatcher = self.telegram.dispatcher
