@@ -22,10 +22,13 @@ from functools import partial
 from random import randint
 
 # eternal libs
+import aitertools
+
 from aiogram import types
 from aiogram.dispatcher import webhook
 from aiogram.dispatcher.filters import Text
 from aiogram.utils import exceptions
+from aiogram.utils.executor import start_polling
 from aiohttp import web
 
 # vk_api...
@@ -43,86 +46,76 @@ import ui_constants as uic
 import tg_lib
 from root.components.telegram import TelegramComponent
 from root.components.vk import VkComponent
+from root.components.soundcloud import SoundcloudComponent
 from tg_lib import DictionaryBomb
 
 
 # function
 # message demon-worker functions
 
-async def get_popular(self.vk.audio, self.database, message):
-    # seek music in vk
-    current_page = 1
-    request = "!popular"
-
-    if request in MUSICLIST_CACHE and current_page * MUSIC_LIST_LENGTH <= len(MUSICLIST_CACHE[request][1]):
-        musiclist = get_cache(MUSICLIST_CACHE, request, current_page)[(current_page - 1) * 9:current_page * 9]
-        NEXT_PAGE_FLAG = True
-        if len(musiclist) < MUSIC_LIST_LENGTH or current_page == 11: NEXT_PAGE_FLAG = False
-    else:
-        while True:
-            try:
-                loop = asyncio.get_running_loop()
-                res_generator = await loop.run_in_executor(None, self.vk.audio.get_popular_iter)
-                musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
-            except ConnectionError:
-                await asyncio.sleep(1)
-            else:
-
-                break
-        if NEXT_PAGE_FLAG: asyncio.create_task(caching_list(self.vk.audio, request))
-
-    # construct inline keyboard for list
-    return uic.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
-
-
-async def get_new_songs(self.vk.audio, self.database, message):
-    # seek music in vk
-    current_page = 1
-    request = "!new_songs"
-
-    if request in MUSICLIST_CACHE and current_page * MUSIC_LIST_LENGTH <= len(MUSICLIST_CACHE[request][1]):
-        musiclist = get_cache(MUSICLIST_CACHE, request, current_page)[(current_page - 1) * 9:current_page * 9]
-        NEXT_PAGE_FLAG = True
-        if len(musiclist) < MUSIC_LIST_LENGTH or current_page == 11: NEXT_PAGE_FLAG = False
-    else:
-        while True:
-            try:
-                loop = asyncio.get_running_loop()
-                res_generator = await loop.run_in_executor(None, self.vk.audio.get_news_iter)
-                musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
-            except ConnectionError:
-                await asyncio.sleep(1)
-            else:
-                break
-        if NEXT_PAGE_FLAG: asyncio.create_task(caching_list(self.vk.audio, request))
-
-    # construct inline keyboard for list
-    return uic.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
-
-
-async def get_state():
-    with open(self.config['bot']['state_filename'], "r", encoding='utf-8') as f:
-        return f.read()
+# async def get_popular(self.vk.audio, self.database, message):
+#     # seek music in vk
+#     current_page = 1
+#     request = "!popular"
+#
+#     if request in MUSICLIST_CACHE and current_page * MUSIC_LIST_LENGTH <= len(MUSICLIST_CACHE[request][1]):
+#         musiclist = get_cache(MUSICLIST_CACHE, request, current_page)[(current_page - 1) * 9:current_page * 9]
+#         NEXT_PAGE_FLAG = True
+#         if len(musiclist) < MUSIC_LIST_LENGTH or current_page == 11: NEXT_PAGE_FLAG = False
+#     else:
+#         while True:
+#             try:
+#                 loop = asyncio.get_running_loop()
+#                 res_generator = await loop.run_in_executor(None, self.vk.audio.get_popular_iter)
+#                 musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
+#             except ConnectionError:
+#                 await asyncio.sleep(1)
+#             else:
+#
+#                 break
+#         if NEXT_PAGE_FLAG: asyncio.create_task(caching_list(self.vk.audio, request))
+#
+#     # construct inline keyboard for list
+#     return uic.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
+#
+#
+# async def get_new_songs(self.vk.audio, self.database, message):
+#     # seek music in vk
+#     current_page = 1
+#     request = "!new_songs"
+#
+#     if request in MUSICLIST_CACHE and current_page * MUSIC_LIST_LENGTH <= len(MUSICLIST_CACHE[request][1]):
+#         musiclist = get_cache(MUSICLIST_CACHE, request, current_page)[(current_page - 1) * 9:current_page * 9]
+#         NEXT_PAGE_FLAG = True
+#         if len(musiclist) < MUSIC_LIST_LENGTH or current_page == 11: NEXT_PAGE_FLAG = False
+#     else:
+#         while True:
+#             try:
+#                 loop = asyncio.get_running_loop()
+#                 res_generator = await loop.run_in_executor(None, self.vk.audio.get_news_iter)
+#                 musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page, MUSIC_LIST_LENGTH)
+#             except ConnectionError:
+#                 await asyncio.sleep(1)
+#             else:
+#                 break
+#         if NEXT_PAGE_FLAG: asyncio.create_task(caching_list(self.vk.audio, request))
+#
+#     # construct inline keyboard for list
+#     return uic.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
 
 
-async def set_state(new_state):
-    with open(self.config['bot']['state_filename'], "w", encoding='utf-8') as f:
-        return f.write(new_state)
+# async def get_state():
+#     with open(self.config['bot']['state_filename'], "r", encoding='utf-8') as f:
+#         return f.read()
+#
+#
+# async def set_state(new_state):
+#     with open(self.config['bot']['state_filename'], "w", encoding='utf-8') as f:
+#         return f.write(new_state)
 
 
-@dataclass
-class VkHandler:
-    session: 'VkApi'
-    audio: 'VkAudio'
+class MusicBot:
 
-
-@dataclass
-class TelegramHandler:
-    bot: 'Bot'
-    dispatcher: 'Dispatcher'
-
-
-class MusicBot(BaseBot):
     def __init__(self, constants, config, logger):
         self.constants = constants
         self.config = config
@@ -157,10 +150,16 @@ class MusicBot(BaseBot):
             #    self.logger.info(f"\t{table[0]}")
 
         # COMPONENTS
-        self.vk = VkComponent(self.config['vk'], self.logger)
+        # self.vk = VkComponent(self.config['vk'], self.logger)
+        self.soundcloud = SoundcloudComponent(self.config['soundcloud'], self.logger)
         self.telegram = TelegramComponent(self.config['telegram'], self.logger)
 
         self.demons = []
+
+    async def find_tracks(self, query):
+        tracks_agen = self.soundcloud.get_tracks_gen(query)
+        async for track in aitertools.islice(tracks_agen, 10):
+            pass
 
     async def send_message(self, user_id: int, text: str, disable_notification: bool = False) -> bool:
         """
@@ -260,15 +259,16 @@ class MusicBot(BaseBot):
             )
         else:
             start_polling(
-                dispatcher=dispatcher,
-                on_startup=on_startup,
-                on_shutdown=on_shutdown,
+                dispatcher=self.telegram.dispatcher,
+                on_startup=self.on_startup,
+                on_shutdown=self.on_shutdown,
                 skip_updates=True
             )
 
     def initialize_handlers(self):
         dispatcher = self.telegram.dispatcher
         # ============= HANDLERS ============
+
         @dispatcher.message_handler(commands=["start"])
         @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["start"]))
         async def start_handler(message: types.Message):
@@ -288,7 +288,7 @@ class MusicBot(BaseBot):
             if len(expression.encode("utf-8")) > 59:
                 await message.reply(uic.TOO_BIG)
                 return
-            keyboard = await seek_music(self.vk.audio, self.database, message, expression)
+            keyboard = await self.find_tracks(self.vk.audio, self.database, message, expression)
             if keyboard is None:
                 await message.reply(uic.NOT_FOUND)
             else:
