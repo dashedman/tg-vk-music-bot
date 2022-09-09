@@ -11,6 +11,8 @@ from root import tg_lib
 from root.audio import VkAudio
 from root.main import ThrottlingMiddleware
 
+import root.ui_constants as uic
+
 
 @dataclass
 class VkHandler:

@@ -2,7 +2,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 
 
-def get_logger(level, backup_length):
+def get_logger(level, backup_length) -> logging.Logger:
     file_log = RotatingFileHandler(
         "bot.log",
         mode='a',
@@ -24,4 +24,4 @@ def get_logger(level, backup_length):
     logging.getLogger('aiohttp.web').setLevel(logging.WARNING)
     logging.getLogger('aiohttp.websocket').setLevel(logging.WARNING)
 
-    LOGGER = logging.getLogger("bot")
+    return logging.getLogger("bot")

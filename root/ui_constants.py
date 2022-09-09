@@ -121,30 +121,21 @@ def get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page=1):
     inline_keyboard = []
     for music in musiclist:
         duration = time.gmtime(music['duration'])
-        inline_keyboard.append([IKB(
-            text = html.unescape(f"{music['artist']} - {music['title']} ({duration.tm_min}:{duration.tm_sec:02})".replace("$#","&#")),
-            callback_data = f"d@{music['owner_id']}@{music['id']}"
-        )])
+        inline_keyboard.append([
+            IKB(
+                text=html.unescape(f"{music['artist']} - {music['title']} ({duration.tm_min}:{duration.tm_sec:02})".replace("$#", "&#")),
+                callback_data=f"d@{music['owner_id']}@{music['id']}",
+            )
+        ])
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
-    inline_keyboard.append([])
-    if current_page > 1:
-        inline_keyboard[-1].append(IKB(text = PREV, callback_data = f'e@{request}@{current_page-1}'))
-    else:
-        inline_keyboard[-1].append(IKB(text = STOP, callback_data = f'pass@'))
-    inline_keyboard[-1].append(IKB(text = current_page, callback_data = f'pass@'))
-    if NEXT_PAGE_FLAG:
-        inline_keyboard[-1].append(IKB(text = NEXT, callback_data = f'e@{request}@{current_page+1}'))
-    else:
-        inline_keyboard[-1].append(IKB(text = STOP, callback_data = f'pass@'))
-    inline_keyboard[-1].append(IKB(text = HIDE, callback_data = f'h@{request}@{current_page}'))
-
-    return  InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 def get_hide_keyboard(request, current_page):
     return InlineKeyboardMarkup(inline_keyboard=[[IKB(
         text=SHOW,
         callback_data= f'e@{request}@{current_page}'
     )]])
+
 
 def build_review_info(message):
     return f"Review from {md.quote_html(message.from_user.mention)}(user: {md.hcode(message.from_user.id)}, chat: {md.hcode(message.chat.id)}){'[is a bot]' if message.from_user.is_bot else ''}"

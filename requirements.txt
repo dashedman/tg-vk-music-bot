@@ -27,3 +27,5 @@ websockets==8.1
 
 aiohttp
 aiogram
+aitertools
+orjson
