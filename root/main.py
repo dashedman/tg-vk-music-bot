@@ -18,14 +18,15 @@ from aiogram.utils.executor import start_polling
 from aiohttp import web
 
 # internal lib
-import soundcloud_lib as sc
 
 import root.ui_constants as uic
 
 import root.utils.utils as utils
-from root.components.telegram import TelegramComponent
-# from root.components.vk import VkComponent
-from root.components.soundcloud import SoundcloudComponent
+from root.commander import Commander
+from root.telegram import TelegramHandler
+from root.sections.yandex_music import YandexMusicSection
+# from root.sections.vk import VkComponent
+# from root.sections.soundcloud import SoundcloudComponent
 
 
 # function
@@ -129,18 +130,20 @@ class MusicBot:
 
         # COMPONENTS
         # self.vk = VkComponent(self.config['vk'], self.logger)
-        self.soundcloud = SoundcloudComponent(self.config['soundcloud'], self.logger)
-        self.telegram = TelegramComponent(self.config['telegram'], self.logger)
+        # self.soundcloud = SoundcloudComponent(self.config['soundcloud'], self.logger)
+        # self.youtube = YoutubeComponent(self.config['youtube'], self.logger)
+        self.yandex_music = YandexMusicSection({}, self.logger)
 
+        self.telegram = TelegramHandler(self.config['telegram'], self.logger)
+        self.commander = Commander()
         self.demons = []
 
     async def find_tracks(self, query):
-        tracks_agen = self.soundcloud.get_tracks_gen(query)
-        tracks: list['sc.Track'] = [
+        tracks_agen = self.yandex_music.get_tracks_gen(query)
+        tracks = [
             t async for t in aitertools.islice(tracks_agen, 10)
         ]
-        keyboard = self.telegram.get_inline_keyboard(tracks)
-        return keyboard
+        return tracks
 
     async def send_message(self, user_id: int, text: str, disable_notification: bool = False) -> bool:
         """
@@ -200,6 +203,8 @@ class MusicBot:
             # asyncio.create_task(reauth_demon(self.vk.session, True))
         ])
         uic.set_signature((await self.telegram.bot.me).mention)
+
+        await self.yandex_music.prepare()
 
         # await vk_api.audio.set_user_id((await vk_api.users.get(return_raw_response = True))['response'][0]['id'])
         # await vk_api.audio.set_client_session(vk_client)
@@ -270,7 +275,14 @@ class MusicBot:
             if len(expression.encode("utf-8")) > 59:
                 await message.reply(uic.TOO_BIG)
                 return
-            keyboard = await self.find_tracks(expression)
+
+            tracks = await self.find_tracks(expression)
+            commands_to_tracks = {}
+            for track in tracks:
+                command_id = self.commander.download_track(track)
+                commands_to_tracks[command_id] = track
+
+            keyboard = self.telegram.get_inline_keyboard(commands_to_tracks)
             if keyboard is None:
                 await message.reply(uic.NOT_FOUND)
             else:

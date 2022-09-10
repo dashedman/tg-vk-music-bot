@@ -751,7 +751,7 @@ class AsyncISlice(typing.Generic[T], typing.AsyncIterator[T]):
         return value
 
 
-def islice(iterable, *args):
+def islice(iterable: typing.AsyncIterable[T], *args):
     """Make an iterator that returns selected elements from the iterable.
 
     If start is non-zero, then elements from the iterable are skipped until
