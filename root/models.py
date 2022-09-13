@@ -6,3 +6,6 @@ class Track:
     title: str
     performer: str
     duration: int
+
+    async def load_audio(self):
+        raise NotImplementedError()

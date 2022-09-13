@@ -43,6 +43,7 @@ TOO_BIG = "Слишком большой запрос :с"
 EMPTY = "Ваш запрос пуст. Поcмотрите примеры в /help"
 UNKNOW_CMD = "Unknow command =/\nEnter /help to get list of commands"
 NO_ACCESS = "Недостаточно прав!"
+OLD_MESSAGE = "Sorry. It's message is out of date :("
 
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(keyboard=[
