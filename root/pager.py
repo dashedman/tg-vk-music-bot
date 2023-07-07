@@ -1,14 +1,16 @@
 import asyncio
 import io
+import logging
 import time
 from typing import AsyncIterable
 
 import aiogram.types as agt
-import aiogram.utils.markdown as agmd
+import aiogram.utils.exceptions
+from aiogram.types import ChatActions
 
 import aitertools
 import root.ui_constants as uic
-from root.commander import CallbackCommander
+from root.commander import CallbackCommander, CommandId
 from root.models import Track
 
 
@@ -16,11 +18,12 @@ class PagersManager:
     def __init__(self, commander: CallbackCommander):
         self.commander = commander
 
-    def create_pager(self, message, tracks_gen):
+    def create_pager(self, message, tracks_gen, target):
         return Pager(
             self,
             message,
             tracks_gen,
+            target=target,
             lifetime=600
         )
 
@@ -33,6 +36,7 @@ class Pager:
             pagers_manager: PagersManager,
             user_message: 'agt.Message',
             tracks_gen: AsyncIterable[Track],
+            target: str,
             lifetime: int = 300
     ):
         self._alive = False
@@ -41,10 +45,17 @@ class Pager:
 
         self._manager = pagers_manager
         self._tracks_gen = tracks_gen
+        self._target = target
 
         self._current_page = -1
-        self._pages: list[list[Track]] = []
-        self._current_commands: list[int] = []
+        self._pages: list[tuple[
+            CommandId,
+            list[tuple[CommandId, Track]]
+        ]] = []
+        self._current_tracks: list[CommandId] = []
+        self._current_page_buttons: list[CommandId] = []
+
+        self.logger = logging.getLogger('Pager')
 
         self.start(user_message)
 
@@ -55,6 +66,10 @@ class Pager:
 
     async def clear(self):
         self._alive = False
+        for get_page_com, tracks in self._pages:
+            for get_track_com, _ in tracks:
+                self._manager.commander.delete_command(get_track_com)
+            self._manager.commander.delete_command(get_page_com)
         await self._message.delete()
 
     def reload_deadline(self):
@@ -63,7 +78,7 @@ class Pager:
     def in_lifetime(self):
         return time.time() < self._deadline
 
-    async def service(self, user_message: 'agt.Message', pager_size: int = 10):
+    async def service(self, user_message: 'agt.Message', pager_size: int = 5):
         success = await self.prepare_first_page(user_message)
         if not success:
             await user_message.reply(uic.NOT_FOUND)
@@ -72,47 +87,34 @@ class Pager:
             return
 
         while self._alive and self.in_lifetime():
-            if len(self._pages) < pager_size:
-                await self.prepare_next_page()
+            if len(self._pages) < pager_size and success:
+                success = await self.prepare_next_page()
 
             await asyncio.sleep(1)
 
         await self.clear()
 
     def construct_page_keyboard(self):
-        # clear commands
-        for command_id in self._current_commands:
-            self._manager.commander.delete_command(command_id)
-        self._current_commands.clear()
-
         inline_keyboard = []
-        page = self._pages[self._current_page]
+        _, page = self._pages[self._current_page]
         # set track buttons
-        for track in page:
+        for get_track_com, track in page:
             duration = time.gmtime(track.duration)
-            send_track_command_id = self._manager.commander.create_command(
-                self.send_track,
-                track,
-            )
-            self._current_commands.append(send_track_command_id)
             inline_keyboard.append([
                 agt.InlineKeyboardButton(
                     text=f"{track.performer} - {track.title} ({duration.tm_min}:{duration.tm_sec:02})",
-                    callback_data=str(send_track_command_id),
+                    callback_data=str(get_track_com),
                 )
             ])
         # set page buttons
         page_btns = []
-        for i in range(len(self._pages)):
+        for i, (get_page_com, _) in enumerate(self._pages):
             if i == self._current_page:
                 btn_text = f'[{self._current_page + 1}]'
                 callback_data = self._manager.commander.DO_NOTHING
             else:
                 btn_text = str(i + 1)
-                callback_data = self._manager.commander.create_command(
-                    self.switch_page, i
-                )
-                self._current_commands.append(callback_data)
+                callback_data = get_page_com
 
             page_btns.append(
                 agt.InlineKeyboardButton(
@@ -129,7 +131,11 @@ class Pager:
             return False
 
         self._current_page = 0
-        self._pages.append(tracks)
+        page_command = self._manager.commander.create_command(
+            self.switch_page,
+            self._current_page
+        )
+        self._pages.append((page_command, tracks))
 
         keyboard = self.construct_page_keyboard()
         self._message = await user_message.reply(
@@ -142,37 +148,59 @@ class Pager:
         if not tracks:
             return False
 
-        self._pages.append(tracks)
+        page_command = self._manager.commander.create_command(
+            self.switch_page,
+            len(self._pages)
+        )
+        self._pages.append((page_command, tracks))
 
         keyboard = self.construct_page_keyboard()
-        await self._message.edit_text(
-            uic.FINDED, reply_markup=keyboard, disable_web_page_preview=True
-        )
+        try:
+            await self._message.edit_text(
+                uic.FINDED, reply_markup=keyboard, disable_web_page_preview=True
+            )
+        except aiogram.utils.exceptions.MessageNotModified:
+            pass
         return True
 
-    async def get_tracks_for_page(self, page_size: int = 10) -> list[Track]:
-        return [
-            t async for t in aitertools.islice(self._tracks_gen, page_size)
-        ]
+    async def get_tracks_for_page(self, page_size: int = 10) -> list[(CommandId, Track)]:
+        tracks = []
+        async for t in aitertools.islice(self._tracks_gen, page_size):
+            send_track_command_id = self._manager.commander.create_command(
+                self.send_track, t)
+            tracks.append((send_track_command_id, t))
+        return tracks
 
     # CALLBACKS
     async def send_track(self, callback_query: agt.CallbackQuery, track: Track):
         self.reload_deadline()
 
-        track_data = await track.load_audio()
-        await callback_query.message.answer_audio(
-            audio=agt.InputFile(
-                io.BytesIO(track_data),
-                filename=f"{track.performer[:32]}_{track.title[:32]}.mp3"
+        message, track_data, _ = await asyncio.gather(
+            callback_query.message.answer(
+                uic.starting_download(track.title, track.performer),
             ),
-            title=track.title,
-            performer=track.performer,
-            caption=uic.SIGNATURE,
-            duration=track.duration,
-            parse_mode='html',
+            track.load_audio(),
+            callback_query.message.answer_chat_action(ChatActions.UPLOAD_DOCUMENT)
         )
 
-    async def switch_page(self, callback_query: agt.CallbackQuery, page_number: int):
+        await asyncio.gather(
+            message.delete(),
+            callback_query.message.answer_audio(
+                audio=agt.InputFile(
+                    io.BytesIO(track_data),
+                    filename=f"{track.performer[:32]}_{track.title[:32]}.mp3",
+
+                ),
+                title=track.title,
+                performer=track.performer,
+                caption=uic.SIGNATURE,
+                duration=track.duration,
+                parse_mode='html',
+            )
+        )
+
+    async def switch_page(self, _: agt.CallbackQuery, page_number: int):
+        self.logger.info('Switch page to %s', page_number)
         self.reload_deadline()
         self._current_page = page_number
 

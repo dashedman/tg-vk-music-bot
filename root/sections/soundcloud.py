@@ -1,4 +1,4 @@
-from soundcloud_lib import SoundcloudAPI
+from sclib.asyncio import SoundcloudAPI
 from root.sections.base import AbstractSection
 
 
@@ -12,6 +12,6 @@ class SoundcloudSection(AbstractSection):
         self.api = SoundcloudAPI()
 
     async def get_tracks_gen(self, query):
-        tracks = await self.api.tracks(query)
+        raw_tracks = await self.api.
         for t in tracks.collection:
             yield t

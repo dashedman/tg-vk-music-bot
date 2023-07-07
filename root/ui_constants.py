@@ -20,6 +20,7 @@ PREV = "◀️"
 NEXT = "▶️"
 STOP = "⛔️"
 REFRESH = "🔄"
+ROCKET = "🚀"
 
 NO_CONFIG_MESSAGE = "Please take config.ini from developers"
 SETTINGS = "Settings.."
@@ -136,6 +137,10 @@ def get_hide_keyboard(request, current_page):
         text=SHOW,
         callback_data= f'e@{request}@{current_page}'
     )]])
+
+
+def starting_download(title: str, artist: str):
+    return f'{ROCKET} {title} - {artist}'
 
 
 def build_review_info(message):

@@ -24,9 +24,10 @@ import root.ui_constants as uic
 import root.utils.utils as utils
 from root.commander import CallbackCommander
 from root.pager import PagersManager
+# from root.sections.soundcloud import SoundcloudSection
 from root.telegram import TelegramHandler
-from root.sections.yandex_music import YandexMusicSection
-# from root.sections.vk import VkComponent
+from root.sections.vk import VkSection
+# from root.sections.yandex_music import YandexMusicSection
 # from root.sections.soundcloud import SoundcloudComponent
 
 
@@ -56,40 +57,40 @@ class MusicBot:
         self.demons = []
 
         # self.database loading
-        self.logger.info(f"Database loading...")
-        self.database = sqlite3.connect(self.config['data-base']['host'])
-        # all_mode table
-        with self.database:
-            cur = self.database.cursor()
-            cur.execute(
-                """CREATE TABLE IF NOT EXISTS chats
-                (id TEXT PRIMARY KEY,
-                mode BOOL NOT NULL,
-                ad_counter INT NOT NULL DEFAULT 25)""")
-
-            cur.execute(
-                """CREATE TABLE IF NOT EXISTS audios
-                (
-                    id          TEXT PRIMARY KEY,
-                    telegram_id TEXT UNIQUE NOT NULL,
-                    audio_size  REAL        NOT NULL
-                )""")
-
-            # PRINTING TABLES
-            # db_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
-            # self.logger.info("TABLES:")
-            # for table in db_cursor.fetchall():
-            #    self.logger.info(f"\t{table[0]}")
+        # self.logger.info(f"Database loading...")
+        # self.database = sqlite3.connect(self.config['data-base']['host'])
+        # # all_mode table
+        # with self.database:
+        #     cur = self.database.cursor()
+        #     cur.execute(
+        #         """CREATE TABLE IF NOT EXISTS chats
+        #         (id TEXT PRIMARY KEY,
+        #         mode BOOL NOT NULL,
+        #         ad_counter INT NOT NULL DEFAULT 25)""")
+        #
+        #     cur.execute(
+        #         """CREATE TABLE IF NOT EXISTS audios
+        #         (
+        #             id          TEXT PRIMARY KEY,
+        #             telegram_id TEXT UNIQUE NOT NULL,
+        #             audio_size  REAL        NOT NULL
+        #         )""")
+        #
+        #     # PRINTING TABLES
+        #     # db_cursor.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+        #     # self.logger.info("TABLES:")
+        #     # for table in db_cursor.fetchall():
+        #     #    self.logger.info(f"\t{table[0]}")
 
         # COMPONENTS
-        # self.vk = VkComponent(self.config['vk'], self.logger)
-        # self.soundcloud = SoundcloudComponent(self.config['soundcloud'], self.logger)
+        self.vk = VkSection(self.config['vk'], self.logger)
+        # self.soundcloud = SoundcloudSection(self.config['soundcloud'], self.logger)
         # self.youtube = YoutubeComponent(self.config['youtube'], self.logger)
-        self.yandex_music = YandexMusicSection(self.config['yandex_music'], self.logger)
+        # self.yandex_music = YandexMusicSection(self.config['yandex_music'], self.logger)
         self.telegram = TelegramHandler(self.config['telegram'], self.logger)
 
     async def find_tracks_gen(self, query):
-        tracks_agen = self.yandex_music.get_tracks_gen(query)
+        tracks_agen = self.vk.get_tracks_gen(query)
         return tracks_agen
 
     async def send_message(self, user_id: int, text: str, disable_notification: bool = False) -> bool:
@@ -151,7 +152,7 @@ class MusicBot:
         ])
         uic.set_signature((await self.telegram.bot.me).mention)
 
-        await self.yandex_music.prepare()
+        # await self.vk.prepare()
 
         # await vk_api.audio.set_user_id((await vk_api.users.get(return_raw_response = True))['response'][0]['id'])
         # await vk_api.audio.set_client_session(vk_client)
@@ -203,14 +204,14 @@ class MusicBot:
         dashboard_filter = IDFilter(chat_id=self.config['telegram']['dashboard'])
         # ============= HANDLERS ============
 
-        @dispatcher.message_handler(dashboard_filter, commands=["start"])
+        @dispatcher.message_handler(commands=["start"])
         @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["start"]))
         async def start_handler(message: types.Message):
             # processing command /start
             # send keyboard to user
             await message.reply(f"Keyboard for...", reply_markup=uic.MAIN_KEYBOARD)
 
-        @dispatcher.message_handler(dashboard_filter, commands=["find", "f"])
+        @dispatcher.message_handler(commands=["find", "f"])
         async def find_handler(message: types.Message):
             # processing command /find
             # send finder inline keyboard to user
@@ -219,7 +220,7 @@ class MusicBot:
             # TODO: if zero length state to find
 
             tracks_gen = await self.find_tracks_gen(expression)
-            self.pagers_manager.create_pager(message, tracks_gen)
+            self.pagers_manager.create_pager(message, tracks_gen, target=f'f {expression}')
 
         # @dispatcher.message_handler(commands=["review", "r"], commands_ignore_caption=False,
         #                             content_types=types.ContentType.ANY)
@@ -497,6 +498,6 @@ class MusicBot:
             ):
                 self.logger.warning(f"{'=' * 3} HandlerError[{error}] {'=' * 3}")
             else:
-                self.logger.exception(f"\n\n{'=' * 20} HandlerError[{error}] {'=' * 20}\n{pformat(info.to_python())}\n")  #
+                self.logger.exception(f"\n\n{'=' * 20} HandlerError[{error}] {'=' * 20}\n{pformat(info.to_python())}\n")
 
             return True

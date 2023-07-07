@@ -2,7 +2,6 @@ import asyncio
 import logging
 
 import aiohttp
-import orjson
 
 from .schemas import Tracks
 
@@ -18,7 +17,7 @@ class SoundcloudAPI:
         async with aiohttp.ClientSession() as session:
             self.logger.debug('Request to "%s", params=%s', method_url, params)
             resp = await session.get(method_url, params=params)
-            json = await resp.json(loads=orjson.loads)
+            json = await resp.json()
             self.logger.debug('Response - %25s', json)
             return json
 
