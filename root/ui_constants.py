@@ -26,6 +26,8 @@ NEXT = "▶️"
 STOP = "⛔️"
 REFRESH = "🔄"
 ROCKET = "🚀"
+EARTH = "🌍"
+JUPITER = "🪐"
 
 NO_CONFIG_MESSAGE = "Please take config.ini from developers"
 SETTINGS = "Settings.."
@@ -142,7 +144,7 @@ def get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page=1):
 def get_hide_keyboard(request, current_page):
     return InlineKeyboardMarkup(inline_keyboard=[[IKB(
         text=SHOW,
-        callback_data= f'e@{request}@{current_page}'
+        callback_data=f'e@{request}@{current_page}'
     )]])
 
 

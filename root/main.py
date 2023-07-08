@@ -63,7 +63,7 @@ class MusicBot:
         self.logger.info(f"Initializing...")
         self.db_engine = create_async_engine('sqlite+aiosqlite:///../tracks_data_base.db')
         self.callback_commander = CallbackCommander()
-        self.tracks_cache = TracksCache(self.db_engine, self.constants)
+        self.tracks_cache = TracksCache(self, self.db_engine, self.constants)
         self.pagers_manager = PagersManager(
             self,
             self.callback_commander,

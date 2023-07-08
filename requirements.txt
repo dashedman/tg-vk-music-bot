@@ -1,6 +1,7 @@
 aiogram~=2.25.1
 aiohttp~=3.8.4
-alembic
+alembic~=1.11.1
+asynciolimiter~=1.0.0b1
 bs4~=0.0.1
 beautifulsoup4~=4.12.2
 requests~=2.31.0
@@ -9,3 +10,4 @@ moviepy~=1.0.3
 cryptography~=41.0.1
 coloredlogs~=15.0.1
 SQLAlchemy~=2.0.18
+vk_api @ git+https://github.com/dashedman/vk_api.git

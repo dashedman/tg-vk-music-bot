@@ -6,6 +6,7 @@ from enum import IntEnum
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
+import root
 from root.constants import Constants
 from root.db_models import CachedTrack
 from root.models import Track
@@ -17,7 +18,8 @@ class CacheAnswer(IntEnum):
 
 
 class TracksCache:
-    def __init__(self, db_engine: AsyncEngine, constants: Constants):
+    def __init__(self, bot: 'root.MusicBot', db_engine: AsyncEngine, constants: Constants):
+        self.bot = bot
         self.db_engine = db_engine
         self.already_on_loading = set()
 
@@ -41,15 +43,24 @@ class TracksCache:
             )
 
         if file_id is not None:
+            self.logger.info('Track (%s) taken from cache', track.full_name)
             return CacheAnswer.FromCache, file_id
 
         self.already_on_loading.add(track_id)
+        self.logger.info('Starting load track: %s', track.full_name)
         time_start = time.time()
+        await self.bot.vk.limiter.wait()
+        time_queue = time.time()
+        if time_queue - time_start > 0.1:
+            self.logger.warning(
+                'Staying in queue for %.2f sec (%s)',
+                time_queue - time_start, track.full_name
+            )
         track_data = await track.load_audio()
         time_end = time.time()
         self.logger.info(
-            'Track loaded in %.2f sec, %.2f Mb',
-            time_end - time_start,
+            'Track (%s) loaded in %.2f sec, %.2f Mb', track.full_name,
+            time_end - time_queue,
             len(track_data) / self.constants.MEGABYTE_SIZE
         )
         return CacheAnswer.FromOrigin, track_data

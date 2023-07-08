@@ -107,6 +107,7 @@ class Pager:
         return time.time() < self._deadline
 
     async def service(self, user_message: 'agt.Message', pager_size: int = 5):
+        await self._manager.bot.vk.limiter.wait()
         success = await self.prepare_first_page(user_message)
         if not success:
             self._message = await user_message.reply(uic.NOT_FOUND)
@@ -224,7 +225,8 @@ class Pager:
             )
             return
 
-        _, message = await asyncio.gather(
+        _, _, message = await asyncio.gather(
+            callback_query.message.answer_chat_action('upload_document'),
             message.delete(),
             callback_query.message.answer_audio(
                 audio=agt.InputFile(
