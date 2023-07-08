@@ -2,6 +2,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import AsyncGenerator
 
+import asynciolimiter
 from vk_api import VkApi
 from vk_api.audio import VkAudio
 
@@ -49,12 +50,33 @@ class VkSection(AbstractSection):
         self.session.auth()
 
         self.audio = VkAudio(self.session)
+        self.limiter = asynciolimiter.Limiter(40 / 60)  # 40 requests per minute
 
     def auth_handler(self):
         raise Exception('Auth Handler used!')
 
     async def get_tracks_gen(self, query: str) -> AsyncGenerator[Track, None]:
         for track in self.audio.search_iter(q=query):
+            yield VkTrack(
+                track['title'],
+                track['artist'],
+                track['duration'],
+                track,
+                self.audio
+            )
+
+    async def get_new_songs(self) -> AsyncGenerator[Track, None]:
+        for track in self.audio.get_news_iter():
+            yield VkTrack(
+                track['title'],
+                track['artist'],
+                track['duration'],
+                track,
+                self.audio
+            )
+
+    async def get_popular_songs(self) -> AsyncGenerator[Track, None]:
+        for track in self.audio.get_popular_iter():
             yield VkTrack(
                 track['title'],
                 track['artist'],

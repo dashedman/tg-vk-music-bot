@@ -225,7 +225,7 @@ class TelegramBot(BaseBot):
                 await message.reply(uic.FINDED, reply_markup=keyboard, disable_web_page_preview=True)
 
         @dispatcher.message_handler(commands=["new_songs", "novelties"])
-        @dispatcher.message_handler(FastText(equals=uic.KEYBOARD_COMMANDS["new_songs"]))
+        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["new_songs"]))
         async def new_songs_handler(message: types.Message):
             # processing command /new_songs
             # send news inline keyboard to user
@@ -236,7 +236,7 @@ class TelegramBot(BaseBot):
                 await message.reply(uic.FINDED, reply_markup=keyboard, disable_web_page_preview=True)
 
         @dispatcher.message_handler(commands=["help"])
-        @dispatcher.message_handler(FastText(equals=uic.KEYBOARD_COMMANDS["help"]))
+        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["help"]))
         async def help_handler(message: types.Message):
             # processing command /help
             await message.reply(uic.HELP_TEXT)

@@ -2,19 +2,23 @@
 import asyncio
 import os
 import ssl
-from dataclasses import dataclass
+from copy import deepcopy
 from logging import Logger
 
 from pprint import pformat
 
-from sqlalchemy.ext.asyncio import create_async_engine
+from aiogram.types import ReplyKeyboardMarkup
+from sqlalchemy import select
+from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 # eternal libs
 from aiogram import types
 from aiogram.dispatcher import webhook
-from aiogram.dispatcher.filters import Text, IDFilter
+from aiogram.dispatcher.filters import Text, IDFilter, AdminFilter, ChatTypeFilter
 from aiogram.utils import exceptions
 from aiogram.utils.executor import start_polling
+from aiogram.types.inline_keyboard import InlineKeyboardButton as IKB
 from aiohttp import web
 
 # internal lib
@@ -22,6 +26,7 @@ from aiohttp import web
 import root.ui_constants as uic
 
 import root.utils.utils as utils
+from root import db_models
 from root.commander import CallbackCommander
 from root.constants import Constants
 from root.pager import PagersManager
@@ -59,7 +64,12 @@ class MusicBot:
         self.db_engine = create_async_engine('sqlite+aiosqlite:///../tracks_data_base.db')
         self.callback_commander = CallbackCommander()
         self.tracks_cache = TracksCache(self.db_engine, self.constants)
-        self.pagers_manager = PagersManager(self.callback_commander, self.tracks_cache)
+        self.pagers_manager = PagersManager(
+            self,
+            self.callback_commander,
+            self.tracks_cache,
+            self.constants,
+        )
         self.demons = []
 
         # self.database loading
@@ -98,6 +108,45 @@ class MusicBot:
     async def find_tracks_gen(self, query):
         tracks_agen = self.vk.get_tracks_gen(query)
         return tracks_agen
+
+    async def new_tracks_gen(self):
+        tracks_agen = self.vk.get_new_songs()
+        return tracks_agen
+
+    async def popular_tracks_gen(self):
+        tracks_agen = self.vk.get_popular_songs()
+        return tracks_agen
+
+    async def check_free_mode(self, chat: types.Chat) -> bool:
+        async with self.db_engine.connect() as conn:
+            return await conn.scalar(
+                select(
+                    db_models.Chat.is_free_mode
+                ).where(
+                    db_models.Chat.id == chat.id
+                )
+            )
+
+    async def change_free_mode(self, chat: types.Chat, new_value: bool):
+        async_session = async_sessionmaker(
+            self.db_engine,
+            expire_on_commit=False
+        )
+
+        async with async_session() as session:
+            session: AsyncSession
+            async with session.begin():
+                await session.execute(
+                    insert(
+                        db_models.Chat
+                    ).values({
+                        db_models.Chat.id.key: chat.id,
+                        db_models.Chat.is_free_mode.key: new_value,
+                    }).on_conflict_do_update(
+                        index_elements=[db_models.Chat.id.key],
+                        set_={db_models.Chat.is_free_mode.key: new_value}
+                    )
+                )
 
     async def send_message(self, user_id: int, text: str, disable_notification: bool = False) -> bool:
         """
@@ -208,6 +257,8 @@ class MusicBot:
     def initialize_handlers(self):
         dispatcher = self.telegram.dispatcher
         dashboard_filter = IDFilter(chat_id=self.config['telegram']['dashboard'])
+        admin_filter = AdminFilter()
+        private_chat_filter = ChatTypeFilter(types.chat.ChatType.PRIVATE)
         # ============= HANDLERS ============
 
         @dispatcher.message_handler(commands=["start"])
@@ -217,11 +268,77 @@ class MusicBot:
             # send keyboard to user
             await message.reply(f"Keyboard for...", reply_markup=uic.MAIN_KEYBOARD)
 
+        @dispatcher.message_handler(commands=["settings"])
+        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["settings"]))
+        async def settings_handler(message: types.Message):
+            # processing command /settings
+            await return_settings(message, uic.SETTINGS)
+
+        @dispatcher.message_handler(admin_filter, commands=["all_mode_on"])
+        @dispatcher.message_handler(admin_filter, Text(equals=uic.KEYBOARD_COMMANDS["all_mode_on"]))
+        @dispatcher.message_handler(private_chat_filter, commands=["all_mode_on"])
+        @dispatcher.message_handler(private_chat_filter, Text(equals=uic.KEYBOARD_COMMANDS["all_mode_on"]))
+        async def all_mode_on_handler(message: types.Message):
+            # processing command /about
+            await self.change_free_mode(message.chat, True)
+            await return_settings(message, uic.MODE_ON)
+
+        @dispatcher.message_handler(admin_filter, commands=["all_mode_off"])
+        @dispatcher.message_handler(admin_filter, Text(equals=uic.KEYBOARD_COMMANDS["all_mode_off"]))
+        @dispatcher.message_handler(private_chat_filter, commands=["all_mode_off"])
+        @dispatcher.message_handler(private_chat_filter, Text(equals=uic.KEYBOARD_COMMANDS["all_mode_off"]))
+        async def all_mode_off_handler(message: types.Message):
+            # processing command /about
+            await self.change_free_mode(message.chat, False)
+            await return_settings(message, uic.MODE_OFF)
+
+        async def return_settings(message: types.Message, msg: str):
+            tmp_settings_keyboard = deepcopy(uic.SETTINGS_KEYBOARD)
+            tmp_settings_keyboard.append([IKB(text=(
+                uic.KEYBOARD_COMMANDS['all_mode_off']
+                if await self.check_free_mode(message.chat)
+                else uic.KEYBOARD_COMMANDS['all_mode_on']
+            ))])
+            await message.reply(
+                msg,
+                reply_markup=ReplyKeyboardMarkup(
+                    keyboard=tmp_settings_keyboard,
+                    resize_keyboard=True,
+                    one_time_keyboard=True,
+                    selective=True
+                )
+            )
+
+        @dispatcher.message_handler(commands=["new_songs", "novelties"])
+        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["new_songs"]))
+        async def new_songs_handler(message: types.Message):
+            # processing command /new_songs
+            # send news inline keyboard to user
+            tracks_gen = await self.new_tracks_gen()
+            self.pagers_manager.create_pager(message, tracks_gen, uic.KEYBOARD_COMMANDS["new_songs"])
+
+        @dispatcher.message_handler(commands=["popular", "chart"])
+        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["popular"]))
+        async def chart_handler(message: types.Message):
+            # processing command /popular
+            # send popular inline keyboard to user
+            tracks_gen = await self.popular_tracks_gen()
+            self.pagers_manager.create_pager(message, tracks_gen, uic.KEYBOARD_COMMANDS["popular"])
+
         @dispatcher.message_handler(commands=["find", "f"])
+        @dispatcher.message_handler()
         async def find_handler(message: types.Message):
             # processing command /find
             # send finder inline keyboard to user
-            command, expression = message.get_full_command()
+
+            command_set = message.get_full_command()
+            if command_set:
+                command, expression = command_set
+            else:
+                if await self.check_free_mode(message.chat):
+                    expression = message.text or message.caption
+                else:
+                    return
 
             # TODO: if zero length state to find
 

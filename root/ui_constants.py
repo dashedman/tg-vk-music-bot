@@ -147,7 +147,7 @@ def get_hide_keyboard(request, current_page):
 
 
 def starting_download(title: str, artist: str):
-    return f'{ROCKET} {title} - {artist}'
+    return f'{ROCKET} {artist} - {title}'
 
 
 def build_review_info(message):

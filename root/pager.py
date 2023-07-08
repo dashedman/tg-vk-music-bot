@@ -7,19 +7,28 @@ from typing import AsyncIterable
 
 import aiogram.types as agt
 import aiogram.utils.exceptions
-from aiogram.types import ChatActions
 
 import aitertools
+import root
 import root.ui_constants as uic
 from root.commander import CallbackCommander, CommandId
+from root.constants import Constants
 from root.models import Track
 from root.tracks_cache import TracksCache, CacheAnswer
 
 
 class PagersManager:
-    def __init__(self, commander: CallbackCommander, cache: TracksCache):
+    def __init__(
+            self,
+            bot: 'root.MusicBot',
+            commander: CallbackCommander,
+            cache: TracksCache,
+            constants: Constants,
+    ):
+        self.bot = bot
         self.commander = commander
         self.cache = cache
+        self.constants = constants
         self.pager_registry: dict[str, list[Pager]] = defaultdict(list)
 
     def create_pager(self, message, tracks_gen, target):
@@ -28,13 +37,8 @@ class PagersManager:
             message,
             tracks_gen,
             target,
-            lifetime=600
+            lifetime=self.constants.PAGER_LIFETIME
         )
-
-    def copy_by_target(self, message, target) -> 'Pager | None':
-        origin_pager = self.get_by_target(target)
-
-        copy_pager = Pager(message)
 
     def register_pager(self, pager: 'Pager'):
         self.pager_registry[pager.target].append(pager)
@@ -105,16 +109,16 @@ class Pager:
     async def service(self, user_message: 'agt.Message', pager_size: int = 5):
         success = await self.prepare_first_page(user_message)
         if not success:
-            await user_message.reply(uic.NOT_FOUND)
+            self._message = await user_message.reply(uic.NOT_FOUND)
             await asyncio.sleep(30)
             await self.clear()
             return
 
         while self._alive and self.in_lifetime():
             if len(self._pages) < pager_size and success:
+                await self._manager.bot.vk.limiter.wait()
                 success = await self.prepare_next_page()
-
-            await asyncio.sleep(1)
+            await asyncio.sleep(0)
 
         await self.clear()
 
@@ -205,7 +209,7 @@ class Pager:
                 uic.starting_download(track.title, track.performer),
             ),
             self._manager.cache.check_cache(track),
-            callback_query.message.answer_chat_action(ChatActions.UPLOAD_DOCUMENT)
+            callback_query.message.answer_chat_action('upload_document')
         )
 
         if cache_answer == CacheAnswer.FromCache:
@@ -238,7 +242,6 @@ class Pager:
             track,
             file_id=message.audio.file_id,
         )
-
 
     async def switch_page(self, _: agt.CallbackQuery, page_number: int):
         self.logger.info('Switch page to %s', page_number)

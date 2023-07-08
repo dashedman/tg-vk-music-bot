@@ -9,7 +9,7 @@ class CachedTrack(Base):
     __tablename__ = "cached_tracks"
 
     id: Mapped[str] = mapped_column(String(), primary_key=True)
-    file_id: Mapped[str] = mapped_column(String())
+    file_id: Mapped[str] = mapped_column(String(), unique=True, nullable=False)
 
     def __init__(self, track_id, file_id):
         self.id = track_id
