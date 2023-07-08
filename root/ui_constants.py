@@ -4,12 +4,17 @@ import aiogram.utils.markdown as md
 from aiogram.types.reply_keyboard import ReplyKeyboardMarkup, KeyboardButton as RKB
 from aiogram.types.inline_keyboard import InlineKeyboardMarkup, InlineKeyboardButton as IKB
 
-unescape = lambda s: html.unescape(s.replace("$#","&#"))
+
+unescape = lambda s: html.unescape(s.replace("$#", "&#"))
+
 
 SIGNATURE = ""
+
+
 def set_signature(bot_name: str):
     global SIGNATURE
     SIGNATURE = md.hitalic("via "+bot_name)
+
 
 YES = "🟢"
 NO = "🔴"
@@ -57,15 +62,17 @@ SETTINGS_KEYBOARD = [
     [RKB(text='↩️ Back')]
 ]
 
-KEYBOARD_COMMANDS = { 'popular':'👑 Popular',
-                      'new_songs':'🆕 New songs',
-                      'help':'❓ Help',
-                      'settings':'🔨 Settings',
-                      'about':'📔 About',
-                      'get_state':'📈 Bot State',
-                      'all_mode_on':'🐵 Listen to all message',
-                      'all_mode_off':'🙈 Listen only to commands',
-                      'start':'↩️ Back'}
+KEYBOARD_COMMANDS = {
+    'popular': '👑 Popular',
+    'new_songs': '🆕 New songs',
+    'help': '❓ Help',
+    'settings': '🔨 Settings',
+    'about': '📔 About',
+    'get_state': '📈 Bot State',
+    'all_mode_on': '🐵 Listen to all message',
+    'all_mode_off': '🙈 Listen only to commands',
+    'start': '↩️ Back'
+}
 
 
 HELP_TEXT = """❓ Help
@@ -144,4 +151,7 @@ def starting_download(title: str, artist: str):
 
 
 def build_review_info(message):
-    return f"Review from {md.quote_html(message.from_user.mention)}(user: {md.hcode(message.from_user.id)}, chat: {md.hcode(message.chat.id)}){'[is a bot]' if message.from_user.is_bot else ''}"
+    return f"Review from {md.quote_html(message.from_user.mention)}" \
+           f"(user: {md.hcode(message.from_user.id)}, " \
+           f"chat: {md.hcode(message.chat.id)})" \
+           f"{'[is a bot]' if message.from_user.is_bot else ''}"

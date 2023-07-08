@@ -1,15 +1,15 @@
 # standart libs
 import asyncio
-import sqlite3
 import os
 import ssl
+from dataclasses import dataclass
 from logging import Logger
 
 from pprint import pformat
 
-# eternal libs
-import aitertools
+from sqlalchemy.ext.asyncio import create_async_engine
 
+# eternal libs
 from aiogram import types
 from aiogram.dispatcher import webhook
 from aiogram.dispatcher.filters import Text, IDFilter
@@ -23,10 +23,14 @@ import root.ui_constants as uic
 
 import root.utils.utils as utils
 from root.commander import CallbackCommander
+from root.constants import Constants
 from root.pager import PagersManager
 # from root.sections.soundcloud import SoundcloudSection
 from root.telegram import TelegramHandler
 from root.sections.vk import VkSection
+from root.tracks_cache import TracksCache
+
+
 # from root.sections.yandex_music import YandexMusicSection
 # from root.sections.soundcloud import SoundcloudComponent
 
@@ -46,14 +50,16 @@ from root.sections.vk import VkSection
 
 class MusicBot:
 
-    def __init__(self, constants, config, logger: Logger):
-        self.constants = constants
+    def __init__(self, config, logger: Logger):
+        self.constants = Constants()
         self.config = config
         self.logger = logger
 
         self.logger.info(f"Initializing...")
+        self.db_engine = create_async_engine('sqlite+aiosqlite:///../tracks_data_base.db')
         self.callback_commander = CallbackCommander()
-        self.pagers_manager = PagersManager(self.callback_commander)
+        self.tracks_cache = TracksCache(self.db_engine, self.constants)
+        self.pagers_manager = PagersManager(self.callback_commander, self.tracks_cache)
         self.demons = []
 
         # self.database loading
@@ -220,7 +226,7 @@ class MusicBot:
             # TODO: if zero length state to find
 
             tracks_gen = await self.find_tracks_gen(expression)
-            self.pagers_manager.create_pager(message, tracks_gen, target=f'f {expression}')
+            self.pagers_manager.create_pager(message, tracks_gen, expression)
 
         # @dispatcher.message_handler(commands=["review", "r"], commands_ignore_caption=False,
         #                             content_types=types.ContentType.ANY)

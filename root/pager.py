@@ -2,6 +2,7 @@ import asyncio
 import io
 import logging
 import time
+from collections import defaultdict
 from typing import AsyncIterable
 
 import aiogram.types as agt
@@ -12,20 +13,40 @@ import aitertools
 import root.ui_constants as uic
 from root.commander import CallbackCommander, CommandId
 from root.models import Track
+from root.tracks_cache import TracksCache, CacheAnswer
 
 
 class PagersManager:
-    def __init__(self, commander: CallbackCommander):
+    def __init__(self, commander: CallbackCommander, cache: TracksCache):
         self.commander = commander
+        self.cache = cache
+        self.pager_registry: dict[str, list[Pager]] = defaultdict(list)
 
     def create_pager(self, message, tracks_gen, target):
         return Pager(
             self,
             message,
             tracks_gen,
-            target=target,
+            target,
             lifetime=600
         )
+
+    def copy_by_target(self, message, target) -> 'Pager | None':
+        origin_pager = self.get_by_target(target)
+
+        copy_pager = Pager(message)
+
+    def register_pager(self, pager: 'Pager'):
+        self.pager_registry[pager.target].append(pager)
+
+    def delete_pager(self, pager: 'Pager'):
+        self.pager_registry[pager.target].remove(pager)
+
+    def get_by_target(self, target: str) -> 'Pager | None':
+        target_pagers = self.pager_registry[target]
+        if target_pagers:
+            return target_pagers[0]
+        return None
 
 
 class Pager:
@@ -45,7 +66,7 @@ class Pager:
 
         self._manager = pagers_manager
         self._tracks_gen = tracks_gen
-        self._target = target
+        self.target = target
 
         self._current_page = -1
         self._pages: list[tuple[
@@ -56,6 +77,8 @@ class Pager:
         self._current_page_buttons: list[CommandId] = []
 
         self.logger = logging.getLogger('Pager')
+
+        self._manager.register_pager(self)
 
         self.start(user_message)
 
@@ -70,6 +93,7 @@ class Pager:
             for get_track_com, _ in tracks:
                 self._manager.commander.delete_command(get_track_com)
             self._manager.commander.delete_command(get_page_com)
+        self._manager.delete_pager(self)
         await self._message.delete()
 
     def reload_deadline(self):
@@ -174,22 +198,34 @@ class Pager:
     # CALLBACKS
     async def send_track(self, callback_query: agt.CallbackQuery, track: Track):
         self.reload_deadline()
+        message: agt.Message
 
-        message, track_data, _ = await asyncio.gather(
+        message, (cache_answer, track_data), _ = await asyncio.gather(
             callback_query.message.answer(
                 uic.starting_download(track.title, track.performer),
             ),
-            track.load_audio(),
+            self._manager.cache.check_cache(track),
             callback_query.message.answer_chat_action(ChatActions.UPLOAD_DOCUMENT)
         )
 
-        await asyncio.gather(
+        if cache_answer == CacheAnswer.FromCache:
+            # load by file_id
+            await asyncio.gather(
+                message.delete(),
+                callback_query.message.answer_audio(
+                    audio=track_data,
+                    caption=uic.SIGNATURE,
+                    parse_mode='html',
+                )
+            )
+            return
+
+        _, message = await asyncio.gather(
             message.delete(),
             callback_query.message.answer_audio(
                 audio=agt.InputFile(
                     io.BytesIO(track_data),
                     filename=f"{track.performer[:32]}_{track.title[:32]}.mp3",
-
                 ),
                 title=track.title,
                 performer=track.performer,
@@ -198,6 +234,11 @@ class Pager:
                 parse_mode='html',
             )
         )
+        await self._manager.cache.save_cache(
+            track,
+            file_id=message.audio.file_id,
+        )
+
 
     async def switch_page(self, _: agt.CallbackQuery, page_number: int):
         self.logger.info('Switch page to %s', page_number)

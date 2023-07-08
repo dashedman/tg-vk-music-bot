@@ -11,14 +11,9 @@ from root.log_lib import get_logger
 
 
 # constants
-@dataclass(frozen=True)
-class Constants:
-    MEGABYTE_SIZE = 1 << 20
-    MUSIC_LIST_LENGTH = 5
 
 
 if __name__ == "__main__":
-    constants = Constants()
 
     config_path = "../config.ini"
     if not os.path.exists(config_path):
@@ -34,5 +29,5 @@ if __name__ == "__main__":
     )
 
     # if main then start bot
-    bot = MusicBot(constants, configs, logger)
+    bot = MusicBot(configs, logger)
     bot.start()

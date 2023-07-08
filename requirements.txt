@@ -1,5 +1,6 @@
 aiogram~=2.25.1
 aiohttp~=3.8.4
+alembic
 bs4~=0.0.1
 beautifulsoup4~=4.12.2
 requests~=2.31.0
@@ -7,3 +8,4 @@ m3u8~=3.5.0
 moviepy~=1.0.3
 cryptography~=41.0.1
 coloredlogs~=15.0.1
+SQLAlchemy~=2.0.18

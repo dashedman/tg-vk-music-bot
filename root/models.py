@@ -7,5 +7,8 @@ class Track:
     performer: str
     duration: int
 
-    async def load_audio(self):
+    async def load_audio(self) -> bytes | None:
+        raise NotImplementedError()
+
+    def get_id(self) -> str:
         raise NotImplementedError()

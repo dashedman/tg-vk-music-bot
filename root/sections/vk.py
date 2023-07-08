@@ -27,6 +27,9 @@ class VkTrack(Track):
         )
         return new_audio
 
+    def get_id(self) -> str:
+        return str(self.vtrack['id']) + '_' + str(self.vtrack['owner_id'])
+
 
 class VkSection(AbstractSection):
     def __init__(self, config, logger):

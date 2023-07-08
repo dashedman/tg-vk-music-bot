@@ -81,7 +81,7 @@ def m3u8_to_mp3_advanced_direct(url):
     with open(f'{name}x.mp3', 'wb') as out:
         out.write(ts_content)
     audioclip = AudioFileClip(f'{name}x.mp3')
-    audioclip.write_audiofile(f'{name}.mp3')
+    audioclip.write_audiofile(f'{name}.mp3', logger=None)
     audioclip.close()
     with open(f'{name}.mp3', 'rb') as f:
         data = f.read()
@@ -97,7 +97,7 @@ def m3u8_to_mp3_advanced(name, url):
     with open(f'{name}x.mp3', 'wb') as out:
         out.write(ts_content)
     audioclip = AudioFileClip(f'{name}x.mp3')
-    audioclip.write_audiofile(f'{name}.mp3')
+    audioclip.write_audiofile(f'{name}.mp3', logger=None)
     audioclip.close()
 
 
