@@ -42,7 +42,7 @@ class VkSection(AbstractSection):
             login=self.config['login'],
             password=self.config['password'],
             auth_handler=self.auth_handler,
-            # token=self.config['access_token'],
+            token=self.config['access_token'],
         )
         self.session.http.headers['User-agent'] = \
             'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0)' \
