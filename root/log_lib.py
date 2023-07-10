@@ -13,17 +13,6 @@ class Color:
 def get_logger(level, backup_length) -> logging.Logger:
     FORMATTER_STR = '[%(asctime)s|%(name)s|%(levelname)s] %(message)s'
 
-    formatter = logging.Formatter(FORMATTER_STR)
-
-    file_log = RotatingFileHandler(
-        "bot.log",
-        mode='a',
-        maxBytes=20480,
-        encoding='utf-8',
-        backupCount=backup_length
-    )
-    file_log.setFormatter(formatter)
-
     level_colormap = {
         'critical': {'bold': True, 'color': 'red'},
         'debug': {'color': 'white', 'faint': True},
@@ -43,12 +32,23 @@ def get_logger(level, backup_length) -> logging.Logger:
         'programname': {'color': 'cyan'},
         'username': {'color': 'yellow'}
     }
+
     coloredlogs.install(
         level=level,
         fmt=FORMATTER_STR,
         level_styles=level_colormap,
         field_styles=field_colormap,
     )
+
+    formatter = coloredlogs.ColoredFormatter(FORMATTER_STR)
+    file_log = RotatingFileHandler(
+        "bot.log",
+        mode='a',
+        maxBytes=20480,
+        encoding='utf-8',
+        backupCount=backup_length
+    )
+    file_log.setFormatter(formatter)
 
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
@@ -62,3 +62,12 @@ def get_logger(level, backup_length) -> logging.Logger:
     logging.getLogger('aiohttp.websocket').setLevel(logging.WARNING)
 
     return logging.getLogger("bot")
+
+
+if __name__ == '__main__':
+    logger = get_logger(10, 2)
+    logger.debug('debug test')
+    logger.info('info test')
+    logger.warning('warning test')
+    logger.error('error test')
+    logger.critical('critical test')
