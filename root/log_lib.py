@@ -40,7 +40,11 @@ def get_logger(level, backup_length) -> logging.Logger:
         field_styles=field_colormap,
     )
 
-    formatter = coloredlogs.ColoredFormatter(FORMATTER_STR)
+    formatter = coloredlogs.ColoredFormatter(
+        fmt=FORMATTER_STR,
+        level_styles=level_colormap,
+        field_styles=field_colormap,
+    )
     file_log = RotatingFileHandler(
         "bot.log",
         mode='a',
