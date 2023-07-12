@@ -1,13 +1,13 @@
 import asyncio
 import logging
-import time
 from enum import IntEnum
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker
+import aiogram.types as agt
 
 import root
-from root.constants import Constants
+import root.ui_constants as uic
 from root.db_models import CachedTrack
 from root.models import Track
 
@@ -18,21 +18,50 @@ class CacheAnswer(IntEnum):
 
 
 class TracksCache:
-    def __init__(self, bot: 'root.MusicBot', db_engine: AsyncEngine, constants: Constants):
+    def __init__(self, bot: 'root.MusicBot'):
         self.bot = bot
-        self.db_engine = db_engine
-        self.already_on_loading = set()
-
-        self.constants = constants
         self.logger = logging.getLogger('cache')
 
-    async def check_cache(self, track: Track) -> tuple[CacheAnswer, str | bytes]:
-        # check cache
-        track_id = track.get_id()
-        if track_id in self.already_on_loading:
-            while track_id in self.already_on_loading:
-                await asyncio.sleep(0)
+    @property
+    def db_engine(self):
+        return self.bot.db_engine
 
+    @property
+    def constants(self):
+        return self.bot.constants
+
+    @property
+    def loads_demon(self):
+        return self.bot.loads_demon
+
+    @property
+    def tg_bot(self):
+        return self.bot.telegram.bot
+
+    async def send_track(self, track: Track, chat: agt.Chat):
+        if await self.check_cache_and_send(track, chat):
+            return
+
+        try:
+            await self.loads_demon.push(chat, track)
+        except asyncio.QueueFull:
+            await self.tg_bot.send_message(chat.id, uic.queue_is_full())
+
+    async def check_cache_and_send(self, track: Track, chat: agt.Chat) -> bool:
+        file_id = await self.check_cache(track)
+        if file_id is not None:
+            self.logger.info('Track (%s) taken from cache', track.full_name)
+            await self.tg_bot.send_audio(
+                chat_id=chat.id,
+                audio=file_id,
+                caption=uic.SIGNATURE,
+                parse_mode='html',
+            )
+            return True
+        return False
+
+    async def check_cache(self, track: Track) -> str | None:
+        track_id = track.get_id()
         async with self.db_engine.connect() as conn:
             file_id: str = await conn.scalar(
                 select(
@@ -42,28 +71,7 @@ class TracksCache:
                 ).limit(1)
             )
 
-        if file_id is not None:
-            self.logger.info('Track (%s) taken from cache', track.full_name)
-            return CacheAnswer.FromCache, file_id
-
-        self.already_on_loading.add(track_id)
-        self.logger.info('Starting load track: %s', track.full_name)
-        time_start = time.time()
-        await self.bot.vk.limiter.wait()
-        time_queue = time.time()
-        if time_queue - time_start > 0.1:
-            self.logger.warning(
-                'Staying in queue for %.2f sec (%s)',
-                time_queue - time_start, track.full_name
-            )
-        track_data = await track.load_audio()
-        time_end = time.time()
-        self.logger.info(
-            'Track (%s) loaded in %.2f sec, %.2f Mb', track.full_name,
-            time_end - time_queue,
-            len(track_data) / self.constants.MEGABYTE_SIZE
-        )
-        return CacheAnswer.FromOrigin, track_data
+        return file_id
 
     async def save_cache(self, track: Track, file_id: str):
         track_id = track.get_id()
@@ -80,5 +88,3 @@ class TracksCache:
                         file_id,
                     )
                 )
-
-        self.already_on_loading.remove(track_id)

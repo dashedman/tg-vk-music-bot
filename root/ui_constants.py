@@ -28,6 +28,7 @@ REFRESH = "🔄"
 ROCKET = "🚀"
 EARTH = "🌍"
 JUPITER = "🪐"
+CLOCK = "⏳"
 
 NO_CONFIG_MESSAGE = "Please take config.ini from developers"
 SETTINGS = "Settings.."
@@ -146,6 +147,14 @@ def get_hide_keyboard(request, current_page):
         text=SHOW,
         callback_data=f'e@{request}@{current_page}'
     )]])
+
+
+def queue_is_full():
+    return f'{STOP} Service is busy! Try later again.'
+
+
+def add_to_download_queue(title: str, artist: str):
+    return f'{CLOCK} {artist} - {title} added to queue!'
 
 
 def starting_download(title: str, artist: str):

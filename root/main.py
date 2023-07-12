@@ -29,6 +29,7 @@ import root.utils.utils as utils
 from root import db_models
 from root.commander import CallbackCommander
 from root.constants import Constants
+from root.loads_demon import LoadsDemon
 from root.pager import PagersManager
 # from root.sections.soundcloud import SoundcloudSection
 from root.telegram import TelegramHandler
@@ -63,13 +64,9 @@ class MusicBot:
         self.logger.info(f"Initializing...")
         self.db_engine = create_async_engine('sqlite+aiosqlite:///../tracks_data_base.db')
         self.callback_commander = CallbackCommander()
-        self.tracks_cache = TracksCache(self, self.db_engine, self.constants)
-        self.pagers_manager = PagersManager(
-            self,
-            self.callback_commander,
-            self.tracks_cache,
-            self.constants,
-        )
+        self.tracks_cache = TracksCache(self)
+        self.loads_demon = LoadsDemon(self, workers=3)
+        self.pagers_manager = PagersManager(self)
         self.demons = []
 
         # self.database loading
@@ -203,6 +200,7 @@ class MusicBot:
 
         self.logger.info("Starting demons...")
         self.demons.extend([
+            asyncio.create_task(self.loads_demon.serve())
             # asyncio.create_task(reauth_demon(self.vk.session, True))
         ])
         uic.set_signature((await self.telegram.bot.me).mention)

@@ -11,25 +11,34 @@ import aiogram.utils.exceptions
 import aitertools
 import root
 import root.ui_constants as uic
-from root.commander import CallbackCommander, CommandId
-from root.constants import Constants
+from root.commander import CommandId
 from root.models import Track
-from root.tracks_cache import TracksCache, CacheAnswer
+from root.tracks_cache import CacheAnswer
 
 
 class PagersManager:
     def __init__(
             self,
             bot: 'root.MusicBot',
-            commander: CallbackCommander,
-            cache: TracksCache,
-            constants: Constants,
     ):
         self.bot = bot
-        self.commander = commander
-        self.cache = cache
-        self.constants = constants
         self.pager_registry: dict[str, list[Pager]] = defaultdict(list)
+
+    @property
+    def commander(self):
+        return self.bot.callback_commander
+
+    @property
+    def cache(self):
+        return self.bot.tracks_cache
+
+    @property
+    def constants(self):
+        return self.bot.constants
+
+    @property
+    def loads_demon(self):
+        return self.bot.loads_demon
 
     def create_pager(self, message, tracks_gen, target):
         return Pager(
@@ -203,47 +212,7 @@ class Pager:
     # CALLBACKS
     async def send_track(self, callback_query: agt.CallbackQuery, track: Track):
         self.reload_deadline()
-        message: agt.Message
-
-        message, (cache_answer, track_data), _ = await asyncio.gather(
-            callback_query.message.answer(
-                uic.starting_download(track.title, track.performer),
-            ),
-            self._manager.cache.check_cache(track),
-            callback_query.message.answer_chat_action('upload_document')
-        )
-
-        if cache_answer == CacheAnswer.FromCache:
-            # load by file_id
-            await asyncio.gather(
-                message.delete(),
-                callback_query.message.answer_audio(
-                    audio=track_data,
-                    caption=uic.SIGNATURE,
-                    parse_mode='html',
-                )
-            )
-            return
-
-        _, _, message = await asyncio.gather(
-            callback_query.message.answer_chat_action('upload_document'),
-            message.delete(),
-            callback_query.message.answer_audio(
-                audio=agt.InputFile(
-                    io.BytesIO(track_data),
-                    filename=f"{track.performer[:32]}_{track.title[:32]}.mp3",
-                ),
-                title=track.title,
-                performer=track.performer,
-                caption=uic.SIGNATURE,
-                duration=track.duration,
-                parse_mode='html',
-            )
-        )
-        await self._manager.cache.save_cache(
-            track,
-            file_id=message.audio.file_id,
-        )
+        await self._manager.cache.send_track(track, callback_query.message.chat)
 
     async def switch_page(self, _: agt.CallbackQuery, page_number: int):
         self.logger.info('Switch page to %s', page_number)
