@@ -40,6 +40,10 @@ class PagersManager:
     def loads_demon(self):
         return self.bot.loads_demon
 
+    @property
+    def tg_bot(self):
+        return self.bot.telegram
+
     def create_pager(self, message, tracks_gen, target):
         return Pager(
             self,
@@ -95,6 +99,10 @@ class Pager:
 
         self.start(user_message)
 
+    @property
+    def tg_bot(self):
+        return self._manager.tg_bot
+
     def start(self, user_message: 'agt.Message'):
         self.reload_deadline()
         self._alive = True
@@ -107,7 +115,7 @@ class Pager:
                 self._manager.commander.delete_command(get_track_com)
             self._manager.commander.delete_command(get_page_com)
         self._manager.delete_pager(self)
-        await self._message.delete()
+        await self.tg_bot.delete_message(self._message)
 
     def reload_deadline(self):
         self._deadline = time.time() + self._lifetime
@@ -119,7 +127,7 @@ class Pager:
         await self._manager.bot.vk.limiter.wait()
         success = await self.prepare_first_page(user_message)
         if not success:
-            self._message = await user_message.reply(uic.NOT_FOUND)
+            self._message = await self.tg_bot.reply_message(user_message, uic.NOT_FOUND)
             await asyncio.sleep(30)
             await self.clear()
             return
@@ -176,8 +184,11 @@ class Pager:
         self._pages.append((page_command, tracks))
 
         keyboard = self.construct_page_keyboard()
-        self._message = await user_message.reply(
-            uic.FINDED, reply_markup=keyboard, disable_web_page_preview=True
+        self._message = await self.tg_bot.reply_message(
+            user_message,
+            uic.FINDED,
+            reply_markup=keyboard,
+            disable_web_page_preview=True
         )
         return True
 
@@ -194,8 +205,11 @@ class Pager:
 
         keyboard = self.construct_page_keyboard()
         try:
-            await self._message.edit_text(
-                uic.FINDED, reply_markup=keyboard, disable_web_page_preview=True
+            await self.tg_bot.edit_message(
+                self._message,
+                uic.FINDED,
+                reply_markup=keyboard,
+                disable_web_page_preview=True
             )
         except aiogram.utils.exceptions.MessageNotModified:
             pass
@@ -220,6 +234,9 @@ class Pager:
         self._current_page = page_number
 
         keyboard = self.construct_page_keyboard()
-        await self._message.edit_text(
-            uic.FINDED, reply_markup=keyboard, disable_web_page_preview=True
+        await self.tg_bot.edit_message(
+            self._message,
+            uic.FINDED,
+            reply_markup=keyboard,
+            disable_web_page_preview=True
         )

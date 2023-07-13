@@ -9,7 +9,6 @@ import aiogram.types as agt
 import root
 import root.ui_constants as uic
 from root.models import Track
-from root.tracks_cache import CacheAnswer
 
 
 @dataclass
@@ -43,7 +42,7 @@ class LoadsDemon:
 
     @property
     def tg_bot(self):
-        return self.bot.telegram.bot
+        return self.bot.telegram
 
     async def push(self, chat: agt.Chat, track: Track):
         # fast load with no queue
@@ -70,20 +69,24 @@ class LoadsDemon:
         while self.alive:
             load_task = await self.queue.get()
             await load_task.wait_for_message()
-            await self._load_track(
-                load_task.message,
-                load_task.chat,
-                load_task.track
-            )
+            try:
+                await self._load_track(
+                    load_task.message,
+                    load_task.chat,
+                    load_task.track
+                )
+            except Exception as e:
+                self.logger.error(
+                    'Catch error while worker serving:\n', exc_info=e)
         self.logger.info('End worker: %s', worker_id)
 
     async def _load_track(self, message: agt.Message, chat: agt.Chat, track: Track):
         if await self.cache.check_cache_and_send(track, chat):
-            await message.delete()
+            await self.tg_bot.delete_message(message)
             return
 
         if await self.check_in_curent_loads(track, chat):
-            await message.delete()
+            await self.tg_bot.delete_message(message)
             return
 
         self.current_in_loads.add(track.get_id())
@@ -113,9 +116,10 @@ class LoadsDemon:
 
     async def send_track(self, message: agt.Message, track: Track, track_data: bytes) -> str:
         _, _, message = await asyncio.gather(
-            message.answer_chat_action('upload_document'),
-            message.delete(),
-            message.answer_audio(
+            self.tg_bot.answer_chat_action(message, 'upload_document'),
+            self.tg_bot.delete_message(message),
+            self.tg_bot.answer_audio(
+                msg=message,
                 audio=agt.InputFile(
                     io.BytesIO(track_data),
                     filename=f"{track.performer[:32]}_{track.title[:32]}.mp3",

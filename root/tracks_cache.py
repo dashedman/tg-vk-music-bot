@@ -36,7 +36,7 @@ class TracksCache:
 
     @property
     def tg_bot(self):
-        return self.bot.telegram.bot
+        return self.bot.telegram
 
     async def send_track(self, track: Track, chat: agt.Chat):
         if await self.check_cache_and_send(track, chat):

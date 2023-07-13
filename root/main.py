@@ -264,7 +264,7 @@ class MusicBot:
         async def start_handler(message: types.Message):
             # processing command /start
             # send keyboard to user
-            await message.reply(f"Keyboard for...", reply_markup=uic.MAIN_KEYBOARD)
+            await self.telegram.reply_message(message, f"Keyboard for...", reply_markup=uic.MAIN_KEYBOARD)
 
         @dispatcher.message_handler(commands=["settings"])
         @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["settings"]))
@@ -290,15 +290,16 @@ class MusicBot:
             await self.change_free_mode(message.chat, False)
             await return_settings(message, uic.MODE_OFF)
 
-        async def return_settings(message: types.Message, msg: str):
+        async def return_settings(message: types.Message, msg_text: str):
             tmp_settings_keyboard = deepcopy(uic.SETTINGS_KEYBOARD)
             tmp_settings_keyboard.append([IKB(text=(
                 uic.KEYBOARD_COMMANDS['all_mode_off']
                 if await self.check_free_mode(message.chat)
                 else uic.KEYBOARD_COMMANDS['all_mode_on']
             ))])
-            await message.reply(
-                msg,
+            await self.telegram.reply_message(
+                message,
+                msg_text,
                 reply_markup=ReplyKeyboardMarkup(
                     keyboard=tmp_settings_keyboard,
                     resize_keyboard=True,
