@@ -2,6 +2,7 @@ import asyncio
 # telegram api
 import html
 import time
+from asyncio import Future
 from typing import Coroutine
 
 import asynciolimiter
@@ -40,8 +41,9 @@ class TelegramHandler:
         self.dispatcher = Dispatcher(self.bot, storage=self.storage)
 
         self.alive = False
+        self.queue: asyncio.Queue[tuple[int, Coroutine, Future]] = asyncio.Queue(maxsize=50000)
         self.limiters_storage = cachetools.TTLCache(maxsize=10000, ttl=180)
-        self.global_limiter = asynciolimiter.LeakyBucketLimiter(30, capacity=20)
+        self.global_limiter = asynciolimiter.Limiter(30)
 
         middleware = ThrottlingMiddleware(throttling_rate_limit=1.5, silence_cooldown=30)
         self.dispatcher.middleware.setup(middleware)
@@ -59,18 +61,26 @@ class TelegramHandler:
             ])
         return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
-    async def _send_coro(self, chat_id, coro):
-        try:
-            chat_limiter = self.limiters_storage[chat_id]
-        except KeyError:
-            chat_limiter = asynciolimiter.LeakyBucketLimiter(
-                rate=20 / 60, capacity=15
-            ) # 20 per minute
-            self.limiters_storage[chat_id] = chat_limiter
+    async def serve(self):
+        while True:
+            chat_id, coro, fut = await self.queue.get()
+            try:
+                chat_limiter = self.limiters_storage[chat_id]
+            except KeyError:
+                chat_limiter = asynciolimiter.Limiter(
+                    rate=20 / 60
+                )  # 20 per minute
+                self.limiters_storage[chat_id] = chat_limiter
 
-        await chat_limiter.wait()
-        await self.global_limiter.wait()
-        return await coro
+            await chat_limiter.wait()
+            await self.global_limiter.wait()
+            coro_result = await coro
+            fut.set_result(coro_result)
+
+    async def _send_coro(self, chat_id: int, coro: Coroutine):
+        fut = asyncio.get_running_loop().create_future()
+        self.queue.put_nowait((chat_id, coro, fut))
+        return await fut
 
     async def send_message(self, chat_id, *args, **kw):
         return await self._send_coro(

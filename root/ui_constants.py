@@ -153,8 +153,8 @@ def queue_is_full():
     return f'{STOP} Service is busy! Try later again.'
 
 
-def add_to_download_queue(title: str, artist: str):
-    return f'{CLOCK} {artist} - {title} added to queue!'
+def add_to_download_queue(title: str, artist: str, average_load_time: float):
+    return f'{CLOCK} {artist} - {title} added to queue! (average waiting time: {int(average_load_time):d} sec)'
 
 
 def starting_download(title: str, artist: str):

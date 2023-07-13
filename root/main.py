@@ -200,7 +200,8 @@ class MusicBot:
 
         self.logger.info("Starting demons...")
         self.demons.extend([
-            asyncio.create_task(self.loads_demon.serve())
+            asyncio.create_task(self.loads_demon.serve()),
+            asyncio.create_task(self.telegram.serve()),
             # asyncio.create_task(reauth_demon(self.vk.session, True))
         ])
         uic.set_signature((await self.telegram.bot.me).mention)

@@ -31,6 +31,7 @@ class LoadsDemon:
         self.alive = False
         self.current_in_loads = set()
         self.logger = logging.getLogger('loads_demon')
+        self.average_load = 20
 
     @property
     def constants(self):
@@ -44,13 +45,22 @@ class LoadsDemon:
     def tg_bot(self):
         return self.bot.telegram
 
+    def update_avg_time(self, load_time: float):
+        self.average_load = (
+            self.average_load * (1 - self.constants.FORGET_KOEF) +
+            load_time * self.constants.FORGET_KOEF
+        )
+
     async def push(self, chat: agt.Chat, track: Track):
         # fast load with no queue
         task = LoadTask(track, chat)
         self.queue.put_nowait(task)
         message = await self.tg_bot.send_message(
             chat_id=chat.id,
-            text=uic.add_to_download_queue(track.title, track.performer),
+            text=uic.add_to_download_queue(
+                track.title, track.performer,
+                self.average_load * self.queue.qsize()
+            ),
         )
         task.message = message
 
@@ -106,6 +116,7 @@ class LoadsDemon:
             time_end - time_queue,
             len(track_data) / self.constants.MEGABYTE_SIZE
         )
+        self.update_avg_time(time_end - time_queue)
 
         file_id = await self.send_track(message, track, track_data)
         await self.bot.tracks_cache.save_cache(
