@@ -74,13 +74,16 @@ class TelegramHandler:
 
             await chat_limiter.wait()
             await self.global_limiter.wait()
-            try:
-                coro_result = await coro
-            except BaseException as e:
-                fut.set_exception(e)
-            else:
-                fut.set_result(coro_result)
-            self.logger.info('Fut set. Queue size: %s', self.queue.qsize())
+            asyncio.create_task(self.wrap_fut(coro, fut))
+
+    async def wrap_fut(self, coro, fut):
+        try:
+            coro_result = await coro
+        except BaseException as e:
+            fut.set_exception(e)
+        else:
+            fut.set_result(coro_result)
+        self.logger.info('Fut set. Queue size: %s', self.queue.qsize())
 
     async def _send_coro(self, chat_id: int, coro: Coroutine):
         fut = asyncio.get_running_loop().create_future()
