@@ -83,7 +83,6 @@ HELP_TEXT = """❓ Help
 
 /help - рекурсия...
 /about - информация о разработчике.
-/get_state - состояние бота.
 
 /find - искать музыку🔍. Чтобы воспользоватся после команды надо написать название или автора произведения.
 Синоним: /f
@@ -109,24 +108,21 @@ HELP_TEXT = """❓ Help
 
 Публичный мод - мод в котором бот читает все сообщения и воспринимает их как запрос к поиску /find.
 Если мод отключен, бот реагирует только на команды.
+Чтобы бот игнорировал любые сообщения добавте '\\' в началоо сообщения
 """
 
 VIPHELP_TEXT = """
 /vipinfo - get raw info about msg
 /viphelp - get help for admin commands
 
-/log - get last log
-/logs - get all logs
-
-/set_state - set new bot state. "/set_state text"
-/cache - get online cache in bot
+/rep chat_id - answer to review
 
 /err - raise err in bot
 """
 
 ABOUT_TEXT = """📔 About!
 📫 For any questions: @dashed_man
-py3.8"""
+py3.11"""
 
 
 def get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page=1):

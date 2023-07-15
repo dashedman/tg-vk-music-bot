@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, Asyn
 # eternal libs
 from aiogram import types
 from aiogram.dispatcher import webhook
-from aiogram.dispatcher.filters import Text, IDFilter, AdminFilter, ChatTypeFilter
+from aiogram.dispatcher.filters import Text, IDFilter, AdminFilter, ChatTypeFilter, ContentTypeFilter
 from aiogram.utils import exceptions
 from aiogram.utils.executor import start_polling
 from aiogram.types.inline_keyboard import InlineKeyboardButton as IKB
@@ -255,7 +255,7 @@ class MusicBot:
 
     def initialize_handlers(self):
         dispatcher = self.telegram.dispatcher
-        dashboard_filter = IDFilter(chat_id=self.config['telegram']['dashboard'])
+        dashboard_filter = IDFilter(user_id=self.config['telegram']['dashboard'])
         admin_filter = AdminFilter()
         private_chat_filter = ChatTypeFilter(types.chat.ChatType.PRIVATE)
         # ============= HANDLERS ============
@@ -325,8 +325,91 @@ class MusicBot:
             tracks_gen = await self.popular_tracks_gen()
             self.pagers_manager.create_pager(message, tracks_gen, uic.KEYBOARD_COMMANDS["popular"])
 
-        @dispatcher.message_handler(commands=["find", "f"])
-        @dispatcher.message_handler()
+        @dispatcher.message_handler(commands=["help"])
+        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["help"]))
+        async def help_handler(message: types.Message):
+            # processing command /help
+            await message.reply(uic.HELP_TEXT)
+
+        @dispatcher.message_handler(commands=["about"])
+        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["about"]))
+        async def about_handler(message: types.Message):
+            # processing command /about
+            await message.reply(uic.ABOUT_TEXT)
+
+        @dispatcher.message_handler(commands=["review", "r"],
+                                    commands_ignore_caption=False,
+                                    content_types=types.ContentType.ANY)
+        async def review_handler(message: types.Message):
+            command, msg_for_dev = message.get_full_command()
+            if len(msg_for_dev) == 0:
+                await message.reply(uic.EMPTY)
+                return
+
+            if len(msg_for_dev) < 3:
+                await message.reply(uic.TOO_SMALL)
+                return
+
+            try:
+                if message.reply_to_message is not None:
+                    await message.reply_to_message.forward(self.config['telegram']['dashboard'])
+                await message.forward(self.config['telegram']['dashboard'])
+                await self.telegram.bot.send_message(
+                    self.config['telegram']['dashboard'],
+                    uic.build_review_info(message),
+                    parse_mode="html"
+                )
+
+                await message.answer(uic.SENDED)
+            except exceptions.BadRequest:
+                await message.answer(uic.ERROR)
+            except Exception:
+                await message.answer(uic.ERROR)
+                raise
+            return
+
+        @dispatcher.message_handler(dashboard_filter, commands=["vipinfo"])
+        async def send_info(message: types.Message):
+            await message.answer("```\n" + pformat(message.to_python()) + "```", parse_mode="markdown")
+
+        @dispatcher.message_handler(dashboard_filter, commands=["viphelp"])
+        async def viphelp_handler(message: types.Message):
+            await message.reply(uic.VIPHELP_TEXT)
+
+        @dispatcher.message_handler(dashboard_filter, commands=["err"])
+        async def all_err_handler(_: types.Message):
+            raise Exception("My Err C:")
+
+        @dispatcher.message_handler(dashboard_filter,
+                                    commands=["rep"],
+                                    commands_ignore_caption=False,
+                                    content_types=types.ContentType.ANY)
+        async def rep_handler(message: types.Message):
+            command, args_str = message.get_full_command()
+            chat_id, rep_msg = args_str.split(maxsplit=1)
+
+            try:
+                await self.telegram.bot.send_message(chat_id, rep_msg)
+            except exceptions.BotBlocked:
+                await message.answer("Bot blocked by user(")
+            except exceptions.ChatNotFound:
+                await message.answer("Invalid ID")
+            except exceptions.UserDeactivated:
+                await message.answer("User is deactivated")
+            except Exception:
+                await message.reply(uic.ERROR)
+                raise
+            else:
+                await message.reply(uic.SENDED)
+
+        @dispatcher.message_handler(Text(startswith='\\'))
+        async def ignore_text(_: types.Message):
+            pass
+
+        find_commands = {"find", "f"}
+
+        @dispatcher.message_handler(commands=find_commands)
+        @dispatcher.message_handler(ContentTypeFilter(["text"]))
         async def find_handler(message: types.Message):
             # processing command /find
             # send finder inline keyboard to user
@@ -334,6 +417,8 @@ class MusicBot:
             command_set = message.get_full_command()
             if command_set:
                 command, expression = command_set
+                if command[1:] not in find_commands:
+                    return
             else:
                 if await self.check_free_mode(message.chat):
                     expression = message.text or message.caption
@@ -345,271 +430,9 @@ class MusicBot:
             tracks_gen = await self.find_tracks_gen(expression)
             self.pagers_manager.create_pager(message, tracks_gen, expression)
 
-        # @dispatcher.message_handler(commands=["review", "r"], commands_ignore_caption=False,
-        #                             content_types=types.ContentType.ANY)
-        # async def review_handler(message: types.Message):
-        #     # processing command /find
-        #     # get streams from db
-        #     # and
-        #     # construct keyboard
-        #     command, msg_for_dev = message.get_full_command()
-        #     if len(msg_for_dev) == 0:
-        #         await message.reply(uic.EMPTY)
-        #         return
-        #
-        #     if len(msg_for_dev) < 3:
-        #         await message.reply(uic.TOO_SMALL)
-        #         return
-        #
-        #     try:
-        #         if message.reply_to_message is not None:
-        #             await message.reply_to_message.forward(self.config['telegram']['dashboard'])
-        #         await message.forward(self.config['telegram']['dashboard'])
-        #         await self.telegram.bot.send_message(
-        #             self.config['telegram']['dashboard'],
-        #             uic.build_review_info(message),
-        #             parse_mode="html"
-        #         )
-        #
-        #         await message.answer(uic.SENDED)
-        #     except exceptions.BadRequest:
-        #         await message.answer(uic.ERROR)
-        #     except Exception:
-        #         await message.answer(uic.ERROR)
-        #         raise
-        #     return
-        #
-        # @dispatcher.message_handler(commands=["help"])
-        # @dispatcher.message_handler(FastText(equals=uic.KEYBOARD_COMMANDS["help"]))
-        # async def help_handler(message: types.Message):
-        #     # processing command /help
-        #     await message.reply(uic.HELP_TEXT)
-        #
-        # @dispatcher.message_handler(commands=["about"])
-        # @dispatcher.message_handler(FastText(equals=uic.KEYBOARD_COMMANDS["about"]))
-        # async def about_handler(message: types.Message):
-        #     # processing command /about
-        #     await message.reply(uic.ABOUT_TEXT)
-
-        # admin_filter = AdminFilter()
-        # private_chat_filter = ChatTypeFilter(types.chat.ChatType.PRIVATE)
-        #
-        # dashboard_filter = IDFilter(chat_id=self.config['telegram']['dashboard'])
-        #
-        # @dispatcher.message_handler(dashboard_filter, commands=["vipinfo"])
-        # async def send_info(message: types.Message):
-        #     await message.answer("```\n" + pformat(message.to_python()) + "```", parse_mode="markdown")
-        #
-        # @dispatcher.message_handler(dashboard_filter, commands=["viphelp"])
-        # async def viphelp_handler(message: types.Message):
-        #     # processing command /viphelp
-        #     await message.reply(uic.VIPHELP_TEXT)
-        #
-        # @dispatcher.message_handler(dashboard_filter, commands=["rep"], commands_ignore_caption=False,
-        #                             content_types=types.ContentType.ANY)
-        # async def rep_handler(message: types.Message):
-        #     # processing command /del caption
-        #     # get streamers from db
-        #     # and
-        #     # construct keyboard
-        #     command, args = message.get_full_command()
-        #     args = args.split()
-        #     chat_id = args[0]
-        #     rep_msg = ' '.join(args[1:])
-        #
-        #     try:
-        #         await self.telegram.bot.send_message(chat_id, rep_msg)
-        #     except BotBlocked:
-        #         await message.answer("Bot blocked by user(")
-        #     except ChatNotFound:
-        #         await message.answer("Invalid ID")
-        #     except UserDeactivated:
-        #         await message.answer("User is deactivated")
-        #     except:
-        #         await message.reply(uic.ERROR)
-        #         raise
-        #     else:
-        #         await message.reply(uic.SENDED)
-        #
-        # @dispatcher.message_handler(dashboard_filter, commands=["log"])
-        # async def log_handler(message: types.Message):
-        #     # processing command /log
-        #     await message.chat.do('upload_document')
-        #     await message.answer_document(document=types.InputFile('bot.log'))
-        #
-        # @dispatcher.message_handler(dashboard_filter, commands=["logs"])
-        # async def all_logs_handler(message: types.Message):
-        #     # processing command /logs
-        #     await message.chat.do('upload_document')
-        #     group = types.MediaGroup()
-        #     # main log
-        #     group.attach_document(types.InputFile('bot.log'), 'Last Logs')
-        #     # other logs
-        #     for i in range(1, self.config['logging'].getint('backup_length') + 1):
-        #         try:
-        #             group.attach_document(types.InputFile(f'bot.log.{i}'))
-        #         except FileNotFoundError:
-        #             break
-        #     await message.answer_media_group(media=group)
-        #
-        # @dispatcher.message_handler(dashboard_filter, commands=["err"])
-        # async def all_err_handler(message: types.Message):
-        #     raise Exception("My Err C:")
-        #
-        # @dispatcher.message_handler(ContentTypeFilter(["text"]),
-        #                             lambda message: tg_lib.all_mode_check(self.database, message.chat.id) and message.text[
-        #                                 0] != '/')
-        # async def text_handler(message: types.Message):
-        #     message.text = f"/f{(await self.telegram.bot.me).mention} {message.text}"
-        #     await find_handler(message)
-        #
         @dispatcher.callback_query_handler()
         async def button_handler(callback_query: types.CallbackQuery):
             await self.callback_commander.execute(callback_query)
-
-            # if command == 'd':  # download audio
-            #     full_audio_id = data[0] + '_' + data[1]
-            #
-            #     await callback_query.message.chat.do('upload_document')
-            #     while full_audio_id in IS_DOWNLOAD:
-            #         await asyncio.sleep(0.07)
-            #
-            #     # cached flag
-            #     CACHED = True
-            #     # check audio in old loads
-            #     if audio_data := tg_lib.db_get_audio(self.database, full_audio_id):
-            #         telegram_id, audio_size = audio_data
-            #         # send id from old audio in telegram
-            #         if audio_size == 0:
-            #             # delete if file is empty
-            #             tg_lib.db_del_audio(self.database, full_audio_id)
-            #             CACHED = False
-            #         else:
-            #             try:
-            #                 await callback_query.message.answer_audio(
-            #                     audio=telegram_id,
-            #                     caption=f'{audio_size:.2f} MB (cached)\n{uic.SIGNATURE}',
-            #                     parse_mode='html'
-            #                 )
-            #             except:
-            #                 # if telegram clear his cache files or file is broken
-            #                 tg_lib.db_del_audio(self.database, full_audio_id)
-            #     else:
-            #
-            #         CACHED = False
-            #
-            #     if not CACHED:
-            #         # set lock on downloading this track
-            #         IS_DOWNLOAD.add(full_audio_id)
-            #
-            #         owner_id, audio_id = data
-            #         loop = asyncio.get_running_loop()
-            #         new_audio = await loop.run_in_executor(None, self.vk.audio.get_audio_by_id, owner_id, audio_id)
-            #
-            #         # download audio
-            #
-            #         response = await requests.head(new_audio['url'])
-            #
-            #         audio_size = int(response.headers.get('content-length', 0)) / MEGABYTE_SIZE
-            #
-            #         if audio_size >= 50:
-            #             duration = time.gmtime(new_audio['duration'])
-            #             await callback_query.message.answer(
-            #                 uic.unescape(
-            #                     f"{new_audio['artist']} - {new_audio['title']} "
-            #                     f"({duration.tm_min}:{duration.tm_sec:02})\n"
-            #                     f"This audio file size is too large :c"
-            #                 )
-            #             )
-            #             IS_DOWNLOAD.discard(full_audio_id)
-            #             return
-            #
-            #         elif audio_size == 0:
-            #             duration = time.gmtime(new_audio['duration'])
-            #             await callback_query.message.answer(
-            #                 uic.unescape(
-            #                     f"{new_audio['artist']} - {new_audio['title']} "
-            #                     f"({duration.tm_min}:{duration.tm_sec:02})\n"
-            #                     f"This audio file is empty :c"
-            #                 )
-            #             )
-            #             IS_DOWNLOAD.discard(full_audio_id)
-            #             self.logger.warning(f'Empty file\n{pformat(new_audio)}')
-            #             return
-            #
-            #
-            #         while True:
-            #             try:
-            #                 response = await requests.get(new_audio['url'])
-            #
-            #             except RemoteProtocolError:
-            #                 await self.telegram.bot.send_message(self.config['telegram']['dashboard'], "Cicle Load")
-            #                 await asyncio.sleep(0)
-            #             else:
-            #
-            #                 break
-            #
-            #         # send new audio file
-            #         response = await callback_query.message.answer_audio(
-            #             audio=types.InputFile(
-            #                 io.BytesIO(response.content),
-            #                 filename=f"{new_audio['artist'][:32]}_{new_audio['title'][:32]}.mp3"
-            #             ),
-            #             title=uic.unescape(new_audio['title']),
-            #             performer=uic.unescape(new_audio['artist']),
-            #             caption=f'{audio_size:.2f} MB\n{uic.SIGNATURE}',
-            #             duration=new_audio['duration'],
-            #             parse_mode='html'
-            #         )
-            #
-            #         # save new audio in db
-            #         tg_lib.db_put_audio(self.database,
-            #                             full_audio_id,
-            #                             response['audio']['file_id'],
-            #                             audio_size)
-            #
-            #         IS_DOWNLOAD.discard(full_audio_id)
-            #
-            # if command == 'e':
-            #
-            #     request = data[0]
-            #     current_page = int(data[1])  # or ad_id for ad
-            #
-            #     if request in MUSICLIST_CACHE and current_page * MUSIC_LIST_LENGTH <= len(MUSICLIST_CACHE[request][1]):
-            #         musiclist = get_cache(MUSICLIST_CACHE, request, current_page)[(current_page - 1) * 9:current_page * 9]
-            #         NEXT_PAGE_FLAG = True
-            #         if len(musiclist) < MUSIC_LIST_LENGTH or current_page == 11:
-            #             NEXT_PAGE_FLAG = False
-            #     else:
-            #         while True:
-            #             try:
-            #                 if request == "!popular":
-            #                     res_generator = self.vk.audio.get_popular_iter(offset=current_page * MUSIC_LIST_LENGTH)
-            #                 elif request == "!new_songs":
-            #                     res_generator = self.vk.audio.get_news_iter(offset=(current_page - 1) * MUSIC_LIST_LENGTH)
-            #                 else:
-            #                     res_generator = self.vk.audio.search_iter(request, offset=(current_page - 1) * MUSIC_LIST_LENGTH)
-            #
-            #                 musiclist, NEXT_PAGE_FLAG = await tg_lib.get_music_list(res_generator, current_page,
-            #                                                                         MUSIC_LIST_LENGTH)
-            #             except ConnectionError:
-            #                 await asyncio.sleep(1)
-            #             else:
-            #                 break
-            #         if NEXT_PAGE_FLAG: asyncio.create_task(caching_list(self.vk.audio, request))
-            #
-            #     # construct inline keyboard for list
-            #     inline_keyboard = uic.get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page)
-            #
-            #     # send answer
-            #     await callback_query.message.edit_reply_markup(reply_markup=inline_keyboard)
-            #
-            # if command == 'h':
-            #     request = data[0]
-            #     current_page = int(data[1])  # or ad_id if request == '!ad'
-            #
-            #     inline_keyboard = uic.get_hide_keyboard(request, current_page)
-            #     await callback_query.message.edit_reply_markup(reply_markup=inline_keyboard)
 
         @dispatcher.errors_handler()
         async def error_handler(info, error):
