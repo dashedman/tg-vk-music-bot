@@ -137,7 +137,7 @@ class LoadsDemon:
                 ),
                 title=track.title,
                 performer=track.performer,
-                caption=uic.SIGNATURE,
+                caption=self.bot.signer.get_signature(track.performer),
                 duration=track.duration,
                 parse_mode='html',
             )

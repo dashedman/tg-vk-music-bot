@@ -1,19 +1,23 @@
-import time
 import html
+import time
+
 import aiogram.utils.markdown as md
 from aiogram.types.reply_keyboard import ReplyKeyboardMarkup, KeyboardButton as RKB
-from aiogram.types.inline_keyboard import InlineKeyboardMarkup, InlineKeyboardButton as IKB
 
 
-unescape = lambda s: html.unescape(s.replace("$#", "&#"))
+def unescape(s: str):
+    return html.unescape(s.replace("$#", "&#"))
 
 
-SIGNATURE = ""
+class Signer:
+    signature_base: str
 
+    def set_signature(self, bot_name: str):
+        self.signature_base = f'via {bot_name}'
 
-def set_signature(bot_name: str):
-    global SIGNATURE
-    SIGNATURE = md.hitalic("via "+bot_name)
+    def get_signature(self, performer: str):
+        return md.hitalic(
+            f'#{performer.replace(" ", "_")}, {self.signature_base}')
 
 
 YES = "🟢"
@@ -29,6 +33,7 @@ ROCKET = "🚀"
 EARTH = "🌍"
 JUPITER = "🪐"
 CLOCK = "⏳"
+LIGHTNING = "⚡"
 
 NO_CONFIG_MESSAGE = "Please take config.ini from developers"
 SETTINGS = "Settings.."
@@ -57,7 +62,7 @@ OLD_MESSAGE = "Sorry. It's message is out of date :("
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(keyboard=[
     [RKB(text='👑 Popular'), RKB(text='🆕 New songs')],
-    [RKB(text='❓ Help'),     RKB(text='📈 Bot State')],
+    [RKB(text='❓ Help')],
     [RKB(text='🔨 Settings'),    RKB(text='📔 About')]
 ], resize_keyboard=True, one_time_keyboard=True, selective=True)
 
@@ -125,26 +130,6 @@ ABOUT_TEXT = """📔 About!
 py3.11"""
 
 
-def get_inline_keyboard(musiclist, request, NEXT_PAGE_FLAG, current_page=1):
-    inline_keyboard = []
-    for music in musiclist:
-        duration = time.gmtime(music['duration'])
-        inline_keyboard.append([
-            IKB(
-                text=html.unescape(f"{music['artist']} - {music['title']} ({duration.tm_min}:{duration.tm_sec:02})".replace("$#", "&#")),
-                callback_data=f"d@{music['owner_id']}@{music['id']}",
-            )
-        ])
-    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
-
-
-def get_hide_keyboard(request, current_page):
-    return InlineKeyboardMarkup(inline_keyboard=[[IKB(
-        text=SHOW,
-        callback_data=f'e@{request}@{current_page}'
-    )]])
-
-
 def queue_is_full():
     return f'{STOP} Service is busy! Try later again.'
 
@@ -162,3 +147,14 @@ def build_review_info(message):
            f"(user: {md.hcode(message.from_user.id)}, " \
            f"chat: {md.hcode(message.chat.id)})" \
            f"{'[is a bot]' if message.from_user.is_bot else ''}"
+
+
+def build_track_button_name(
+        performer: str,
+        title: str,
+        duration: time.struct_time,
+        is_in_cache: bool,
+):
+    return f'{performer} - {title} ({duration.tm_min}:{duration.tm_sec:02})' + (
+         ' ' + LIGHTNING if is_in_cache else ''
+    )

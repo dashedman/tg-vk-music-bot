@@ -48,19 +48,19 @@ class TracksCache:
             await self.tg_bot.send_message(chat.id, uic.queue_is_full())
 
     async def check_cache_and_send(self, track: Track, chat: agt.Chat) -> bool:
-        file_id = await self.check_cache(track)
+        file_id = await self.get_cache(track)
         if file_id is not None:
             self.logger.info('Track (%s) taken from cache', track.full_name)
             await self.tg_bot.send_audio(
                 chat_id=chat.id,
                 audio=file_id,
-                caption=uic.SIGNATURE,
+                caption=self.bot.signer.get_signature(track.performer),
                 parse_mode='html',
             )
             return True
         return False
 
-    async def check_cache(self, track: Track) -> str | None:
+    async def get_cache(self, track: Track) -> str | None:
         track_id = track.get_id()
         async with self.db_engine.connect() as conn:
             file_id: str = await conn.scalar(
@@ -72,6 +72,18 @@ class TracksCache:
             )
 
         return file_id
+
+    async def check_cache(self, track_ids: list[str]) -> list[str]:
+        async with self.db_engine.connect() as conn:
+            exist_tracks: list[str] = (await conn.execute(
+                select(
+                    CachedTrack.id
+                ).where(
+                    CachedTrack.id.in_(track_ids)
+                )
+            )).scalars().all()
+
+        return exist_tracks
 
     async def save_cache(self, track: Track, file_id: str):
         track_id = track.get_id()

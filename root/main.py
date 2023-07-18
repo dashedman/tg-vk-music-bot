@@ -7,6 +7,7 @@ from logging import Logger
 
 from pprint import pformat
 
+from gevent.threadpool import ThreadPoolExecutor as GeventPoolExecutor
 from aiogram.types import ReplyKeyboardMarkup
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
@@ -55,11 +56,16 @@ from root.tracks_cache import TracksCache
 
 
 class MusicBot:
+    signer: 'uic.Signer'
 
     def __init__(self, config, logger: Logger):
         self.constants = Constants()
         self.config = config
         self.logger = logger
+
+        # self.process_executor = ProcessPoolExecutor()
+        # self.thread_executor = ThreadPoolExecutor()
+        # self.gevent_executor = GeventPoolExecutor()
 
         self.logger.info(f"Initializing...")
         self.db_engine = create_async_engine('sqlite+aiosqlite:///../tracks_data_base.db')
@@ -96,7 +102,7 @@ class MusicBot:
         #     #    self.logger.info(f"\t{table[0]}")
 
         # COMPONENTS
-        self.vk = VkSection(self.config['vk'], self.logger)
+        self.vk = VkSection(self, self.config['vk'], self.logger)
         # self.soundcloud = SoundcloudSection(self.config['soundcloud'], self.logger)
         # self.youtube = YoutubeComponent(self.config['youtube'], self.logger)
         # self.yandex_music = YandexMusicSection(self.config['yandex_music'], self.logger)
@@ -180,7 +186,9 @@ class MusicBot:
             self.logger.info("Old webhook:\n" + pformat(webhook_info.to_python()))
 
             self.logger.info(f"Setting Webhook...")
-            webhook_url = f"https://{self.config['network']['domen']}:{self.config['network']['domen_port']}{self.config['network']['path']}"
+            webhook_url = f"https://{self.config['network']['domen']}" \
+                          f":{self.config['network']['domen_port']}" \
+                          f"{self.config['network']['path']}"
 
             if self.config['ssl'].getboolean('self'):
                 with open(os.path.join(self.config['ssl']['dir'], self.config['ssl']['cert_filename']), "rb") as f:
@@ -204,7 +212,9 @@ class MusicBot:
             asyncio.create_task(self.telegram.serve()),
             # asyncio.create_task(reauth_demon(self.vk.session, True))
         ])
-        uic.set_signature((await self.telegram.bot.me).mention)
+
+        self.signer = uic.Signer()
+        self.signer.set_signature((await self.telegram.bot.me).mention)
 
         # await self.vk.prepare()
 
@@ -225,7 +235,10 @@ class MusicBot:
         self.initialize_handlers()
 
         if self.config['network'].getboolean('is_webhook'):
-            app = webhook.get_new_configured_app(dispatcher=self.telegram.dispatcher, path=self.config['network']['path'])
+            app = webhook.get_new_configured_app(
+                dispatcher=self.telegram.dispatcher,
+                path=self.config['network']['path'],
+            )
             app.on_startup.append(self.on_startup)
             app.on_shutdown.append(self.on_shutdown)
 

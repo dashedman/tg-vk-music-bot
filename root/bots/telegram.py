@@ -645,7 +645,7 @@ class TelegramBot(BaseBot):
             demons.extend([
                 # asyncio.create_task(reauth_demon(self.vk.session, True))
             ])
-            uic.set_signature((await self.telegram.bot.me).mention)
+            uic.set_signature((await self.telegram.bot.me).mention, )
 
             # await vk_api.audio.set_user_id((await vk_api.users.get(return_raw_response = True))['response'][0]['id'])
             # await vk_api.audio.set_client_session(vk_client)

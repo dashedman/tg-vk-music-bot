@@ -1,8 +1,11 @@
 from dataclasses import dataclass
 
+import root.sections.base
+
 
 @dataclass
 class Track:
+    section: 'root.sections.base.AbstractSection'
     title: str
     performer: str
     duration: int

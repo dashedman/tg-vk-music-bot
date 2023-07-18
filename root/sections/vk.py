@@ -11,21 +11,18 @@ from root.models import Track
 # from async_extend import AsyncVkApi, AsyncVkAudio
 
 from root.sections.base import AbstractSection
-from root.utils.m3u8_to_mp3 import m3u8_to_mp3_advanced_direct
+from root.utils.m3u8_to_mp3 import m3u8_to_mp3_advanced_direct, M3u8Loader
 
 
 @dataclass
 class VkTrack(Track):
+    section: 'VkSection'
     vtrack: dict
     audio: VkAudio
 
     async def load_audio(self, codec: str = 'mp3') -> bytes | None:
         m3u8_url = self.vtrack['url'][:self.vtrack['url'].rfind('?')]
-        new_audio = await asyncio.get_running_loop().run_in_executor(
-            None,
-            m3u8_to_mp3_advanced_direct,
-            m3u8_url,
-        )
+        new_audio = await self.section.m3u8_loader.m3u8_to_mp3_wraped(m3u8_url)
         return new_audio
 
     def get_id(self) -> str:
@@ -33,7 +30,9 @@ class VkTrack(Track):
 
 
 class VkSection(AbstractSection):
-    def __init__(self, config, logger):
+
+    def __init__(self, bot, config, logger):
+        self.bot = bot
         self.config = config
         self.logger = logger
 
@@ -50,6 +49,7 @@ class VkSection(AbstractSection):
         self.session.auth()
 
         self.audio = VkAudio(self.session)
+        self.m3u8_loader = M3u8Loader(self.bot)
         self.limiter = asynciolimiter.Limiter(40 / 60)  # 40 requests per minute
 
     def auth_handler(self):
@@ -58,6 +58,7 @@ class VkSection(AbstractSection):
     async def get_tracks_gen(self, query: str) -> AsyncGenerator[Track, None]:
         for track in self.audio.search_iter(q=query):
             yield VkTrack(
+                self,
                 track['title'],
                 track['artist'],
                 track['duration'],
@@ -68,6 +69,7 @@ class VkSection(AbstractSection):
     async def get_new_songs(self) -> AsyncGenerator[Track, None]:
         for track in self.audio.get_news_iter():
             yield VkTrack(
+                self,
                 track['title'],
                 track['artist'],
                 track['duration'],
@@ -78,6 +80,7 @@ class VkSection(AbstractSection):
     async def get_popular_songs(self) -> AsyncGenerator[Track, None]:
         for track in self.audio.get_popular_iter():
             yield VkTrack(
+                self,
                 track['title'],
                 track['artist'],
                 track['duration'],

@@ -44,6 +44,10 @@ class PagersManager:
     def tg_bot(self):
         return self.bot.telegram
 
+    @property
+    def db_engine(self):
+        return self.bot.db_engine
+
     def create_pager(self, message, tracks_gen, target):
         return Pager(
             self,
@@ -103,6 +107,10 @@ class Pager:
     def tg_bot(self):
         return self._manager.tg_bot
 
+    @property
+    def db_engine(self):
+        return self._manager.db_engine
+
     def start(self, user_message: 'agt.Message'):
         self.reload_deadline()
         self._alive = True
@@ -136,19 +144,36 @@ class Pager:
             if len(self._pages) < pager_size and success:
                 await self._manager.bot.vk.limiter.wait()
                 success = await self.prepare_next_page()
+
+                if success and (1 + len(self._pages)) % 2 == 0:
+                    await self.edit_keyboard()
             await asyncio.sleep(0)
+
+        if success and (1 + len(self._pages)) % 2 != 0:
+            await self.edit_keyboard()
 
         await self.clear()
 
-    def construct_page_keyboard(self):
+    async def construct_page_keyboard(self):
         inline_keyboard = []
         _, page = self._pages[self._current_page]
+
+        track_ids_for_page = [t.get_id() for _, t in page]
+        tracks_in_cache = set(
+            await self._manager.cache.check_cache(track_ids_for_page)
+        )
+
         # set track buttons
         for get_track_com, track in page:
             duration = time.gmtime(track.duration)
             inline_keyboard.append([
                 agt.InlineKeyboardButton(
-                    text=f"{track.performer} - {track.title} ({duration.tm_min}:{duration.tm_sec:02})",
+                    text=uic.build_track_button_name(
+                        track.performer,
+                        track.title,
+                        duration,
+                        track.get_id() in tracks_in_cache
+                    ),
                     callback_data=str(get_track_com),
                 )
             ])
@@ -183,7 +208,7 @@ class Pager:
         )
         self._pages.append((page_command, tracks))
 
-        keyboard = self.construct_page_keyboard()
+        keyboard = await self.construct_page_keyboard()
         self._message = await self.tg_bot.reply_message(
             user_message,
             uic.FINDED,
@@ -202,8 +227,10 @@ class Pager:
             len(self._pages)
         )
         self._pages.append((page_command, tracks))
+        return True
 
-        keyboard = self.construct_page_keyboard()
+    async def edit_keyboard(self):
+        keyboard = await self.construct_page_keyboard()
         try:
             await self.tg_bot.edit_message(
                 self._message,
@@ -213,7 +240,6 @@ class Pager:
             )
         except aiogram.utils.exceptions.MessageNotModified:
             pass
-        return True
 
     async def get_tracks_for_page(self, page_size: int = 10) -> list[(CommandId, Track)]:
         tracks = []
@@ -233,7 +259,7 @@ class Pager:
         self.reload_deadline()
         self._current_page = page_number
 
-        keyboard = self.construct_page_keyboard()
+        keyboard = await self.construct_page_keyboard()
         await self.tg_bot.edit_message(
             self._message,
             uic.FINDED,
