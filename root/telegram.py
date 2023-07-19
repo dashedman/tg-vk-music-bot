@@ -23,11 +23,9 @@ from aiogram.utils.exceptions import BotBlocked, ChatNotFound, UserDeactivated
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 import aiogram.types as agt
 
-import soundcloud_lib as sc
 from root.models import Track
 
 from root.utils import ThrottlingMiddleware
-from root.sections.base import AbstractSection
 
 
 class TelegramHandler:
@@ -43,7 +41,7 @@ class TelegramHandler:
         self.alive = False
         self.queue: asyncio.Queue[tuple[int, Coroutine, Future]] = asyncio.Queue(maxsize=50000)
         self.limiters_storage = cachetools.TTLCache(maxsize=10000, ttl=180)
-        self.global_limiter = asynciolimiter.LeakyBucketLimiter(30, capacity=30)
+        self.global_limiter = asynciolimiter.Limiter(30)
 
         middleware = ThrottlingMiddleware(throttling_rate_limit=1.5, silence_cooldown=30)
         self.dispatcher.middleware.setup(middleware)
@@ -67,8 +65,8 @@ class TelegramHandler:
             try:
                 chat_limiter = self.limiters_storage[chat_id]
             except KeyError:
-                chat_limiter = asynciolimiter.LeakyBucketLimiter(
-                    rate=20 / 60, capacity=20
+                chat_limiter = asynciolimiter.Limiter(
+                    rate=20 / 60
                 )  # 20 per minute
                 self.limiters_storage[chat_id] = chat_limiter
 
