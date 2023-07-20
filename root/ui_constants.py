@@ -1,5 +1,6 @@
 import html
 import time
+import re
 
 import aiogram.utils.markdown as md
 from aiogram.types.reply_keyboard import ReplyKeyboardMarkup, KeyboardButton as RKB
@@ -16,8 +17,14 @@ class Signer:
         self.signature_base = f'via {bot_name}'
 
     def get_signature(self, performer: str):
-        return md.hitalic(
-            f'#{performer.replace(" ", "_")}, {self.signature_base}')
+        filtered_performer = re.sub(
+            r'[.,;:!?%\'"`\\|/]',
+            '',
+            re.sub(
+               r'\s', '_', performer
+            )
+        )
+        return md.hitalic(f'#{filtered_performer}, {self.signature_base}')
 
 
 YES = "🟢"
@@ -34,6 +41,9 @@ EARTH = "🌍"
 JUPITER = "🪐"
 CLOCK = "⏳"
 LIGHTNING = "⚡"
+HEADPHONES = "🎧"
+DISK = "📀"
+TIMER = "⏱"
 
 NO_CONFIG_MESSAGE = "Please take config.ini from developers"
 SETTINGS = "Settings.."
@@ -44,7 +54,8 @@ ADDED = "Succsesfully added!"
 SETTED = "Succsesfully setted!"
 DELETED = "Succsesfully deleted!"
 SENDED = "Succsesfully sent!"
-FINDED = "По вашему запросу нашлось"
+FINDED = "По вашему запросу нашлось:"
+FINDED_ALBUMS = "По вашему запросу нашлись альбомы:"
 
 WAIT = "Please wait..."
 WRONG = "Wrong command("
@@ -58,6 +69,7 @@ EMPTY = "Ваш запрос пуст. Поcмотрите примеры в /he
 UNKNOW_CMD = "Unknow command =/\nEnter /help to get list of commands"
 NO_ACCESS = "Недостаточно прав!"
 OLD_MESSAGE = "Sorry. It's message is out of date :("
+ALBUM_IS_TOO_LONG = '... Album is too long ...'
 
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(keyboard=[
@@ -99,6 +111,11 @@ HELP_TEXT = """❓ Help
 
 /new_songs - получить список новинок.
 Синоним: /novelties
+
+/albums - искать альбомы🔍. Чтобы воспользоватся после команды надо написать название альбома.
+Синоним: /a
+Пример: "/albums Nevermind"
+Пример: "/a Nevermind"
 
 /review - написать разработчику
 Синоним: /r
@@ -157,4 +174,24 @@ def build_track_button_name(
 ):
     return f'{performer} - {title} ({duration.tm_min}:{duration.tm_sec:02})' + (
          ' ' + LIGHTNING if is_in_cache else ''
+    )
+
+
+def build_album_button_name(
+        performer: str,
+        title: str,
+        size: int,
+        plays: int | None,
+        is_loaded: bool,
+):
+    if plays is None:
+        plays_str = ''
+    elif plays < 1_000:
+        plays_str = f', {plays} {HEADPHONES}'
+    elif plays < 1_000_000:
+        plays_str = f', {plays / 1000:.1f}k {HEADPHONES}'
+    else:
+        plays_str = f', {plays / 1_000_000:.1f}M {HEADPHONES}'
+    return f'{performer} - {title} [{DISK} {size}{plays_str}]' + (
+         ' ' + LIGHTNING if is_loaded else ''
     )

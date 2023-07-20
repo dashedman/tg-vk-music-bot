@@ -120,6 +120,10 @@ class MusicBot:
         tracks_agen = self.vk.get_popular_songs()
         return tracks_agen
 
+    async def find_albums_gen(self, query):
+        albums_agen = self.vk.get_albums_gen(query)
+        return albums_agen
+
     async def check_free_mode(self, chat: types.Chat) -> bool:
         async with self.db_engine.connect() as conn:
             return await conn.scalar(
@@ -337,6 +341,15 @@ class MusicBot:
             # send popular inline keyboard to user
             tracks_gen = await self.popular_tracks_gen()
             self.pagers_manager.create_pager(message, tracks_gen, uic.KEYBOARD_COMMANDS["popular"])
+
+        @dispatcher.message_handler(commands=["albums", "a"])
+        async def albums_handler(message: types.Message):
+            # processing command /popular
+            # send popular inline keyboard to user
+            command, expression = message.get_full_command()
+
+            albums_gen = await self.find_albums_gen(expression)
+            self.pagers_manager.create_albums_pager(message, albums_gen, expression)
 
         @dispatcher.message_handler(commands=["help"])
         @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["help"]))

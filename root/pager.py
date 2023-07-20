@@ -12,7 +12,7 @@ import aitertools
 import root
 import root.ui_constants as uic
 from root.commander import CommandId
-from root.models import Track
+from root.models import Track, Album
 from root.tracks_cache import CacheAnswer
 
 
@@ -57,6 +57,15 @@ class PagersManager:
             lifetime=self.constants.PAGER_LIFETIME
         )
 
+    def create_albums_pager(self, message, albums_gen, target):
+        return AlbumsPager(
+            self,
+            message,
+            albums_gen,
+            target,
+            lifetime=self.constants.PAGER_LIFETIME
+        )
+
     def register_pager(self, pager: 'Pager'):
         self.pager_registry[pager.target].append(pager)
 
@@ -94,8 +103,6 @@ class Pager:
             CommandId,
             list[tuple[CommandId, Track]]
         ]] = []
-        self._current_tracks: list[CommandId] = []
-        self._current_page_buttons: list[CommandId] = []
 
         self.logger = logging.getLogger('Pager')
 
@@ -147,22 +154,25 @@ class Pager:
 
                 if success and (1 + len(self._pages)) % 2 == 0:
                     await self.edit_keyboard()
+                elif not success and (1 + len(self._pages)) % 2 != 0:
+                    # not success, last update of keyboard
+                    await self.edit_keyboard()
             await asyncio.sleep(0)
-
-        if success and (1 + len(self._pages)) % 2 != 0:
-            await self.edit_keyboard()
-
         await self.clear()
 
     async def construct_page_keyboard(self):
         inline_keyboard = []
+        await self._add_tracks_buttons(inline_keyboard)
+        self._add_page_buttons(inline_keyboard)
+        return agt.InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+    async def _add_tracks_buttons(self, inline_keyboard):
         _, page = self._pages[self._current_page]
 
         track_ids_for_page = [t.get_id() for _, t in page]
         tracks_in_cache = set(
             await self._manager.cache.check_cache(track_ids_for_page)
         )
-
         # set track buttons
         for get_track_com, track in page:
             duration = time.gmtime(track.duration)
@@ -177,6 +187,8 @@ class Pager:
                     callback_data=str(get_track_com),
                 )
             ])
+
+    def _add_page_buttons(self, inline_keyboard):
         # set page buttons
         page_btns = []
         for i, (get_page_com, _) in enumerate(self._pages):
@@ -194,11 +206,10 @@ class Pager:
                 )
             )
         inline_keyboard.append(page_btns)
-        return agt.InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
     async def prepare_first_page(self, user_message: 'agt.Message') -> bool:
-        tracks = await self.get_tracks_for_page()
-        if not tracks:
+        entities = await self.get_entities_for_page()
+        if not entities:
             return False
 
         self._current_page = 0
@@ -206,27 +217,27 @@ class Pager:
             self.switch_page,
             self._current_page
         )
-        self._pages.append((page_command, tracks))
+        self._pages.append((page_command, entities))
 
         keyboard = await self.construct_page_keyboard()
         self._message = await self.tg_bot.reply_message(
             user_message,
-            uic.FINDED,
+            self.finded_message(),
             reply_markup=keyboard,
             disable_web_page_preview=True
         )
         return True
 
     async def prepare_next_page(self) -> bool:
-        tracks = await self.get_tracks_for_page()
-        if not tracks:
+        entities = await self.get_entities_for_page()
+        if not entities:
             return False
 
         page_command = self._manager.commander.create_command(
             self.switch_page,
             len(self._pages)
         )
-        self._pages.append((page_command, tracks))
+        self._pages.append((page_command, entities))
         return True
 
     async def edit_keyboard(self):
@@ -234,14 +245,14 @@ class Pager:
         try:
             await self.tg_bot.edit_message(
                 self._message,
-                uic.FINDED,
+                self.finded_message(),
                 reply_markup=keyboard,
                 disable_web_page_preview=True
             )
         except aiogram.utils.exceptions.MessageNotModified:
             pass
 
-    async def get_tracks_for_page(self, page_size: int = 10) -> list[(CommandId, Track)]:
+    async def get_entities_for_page(self, page_size: int = 10) -> list[(CommandId, Track)]:
         tracks = []
         async for t in aitertools.islice(self._tracks_gen, page_size):
             send_track_command_id = self._manager.commander.create_command(
@@ -262,7 +273,143 @@ class Pager:
         keyboard = await self.construct_page_keyboard()
         await self.tg_bot.edit_message(
             self._message,
-            uic.FINDED,
+            self.finded_message(),
             reply_markup=keyboard,
             disable_web_page_preview=True
         )
+
+    def finded_message(self):
+        return uic.FINDED
+
+
+class AlbumsPager(Pager):
+    _pages: list[tuple[
+        CommandId,
+        list[tuple[CommandId, Album]]
+    ]]
+
+    def __init__(
+            self,
+            pagers_manager: PagersManager,
+            user_message: 'agt.Message',
+            albums_gen: AsyncIterable[Track],
+            target: str,
+            lifetime: int = 300
+    ):
+        self.tracks_by_album: dict[str, list[tuple[CommandId, Track]]] = {}
+        super().__init__(
+            pagers_manager,
+            user_message,
+            albums_gen,
+            target,
+            lifetime,
+        )
+
+    async def clear(self):
+        for album in self.tracks_by_album.values():
+            for get_track_com, _ in album:
+                self._manager.commander.delete_command(get_track_com)
+        await super().clear()
+
+    def finded_message(self):
+        return uic.FINDED_ALBUMS
+
+    async def get_entities_for_page(self, page_size: int = 10) -> list[(CommandId, Album)]:
+        albums = []
+        async for t in aitertools.islice(self._tracks_gen, page_size):
+            send_track_command_id = self._manager.commander.create_command(
+                self.send_album_list, t)
+            albums.append((send_track_command_id, t))
+        return albums
+
+    async def construct_page_keyboard(self):
+        inline_keyboard = []
+        await self._add_albums_buttons(inline_keyboard)
+        self._add_page_buttons(inline_keyboard)
+        return agt.InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+    async def construct_album_page(self, album: Album):
+        inline_keyboard = []
+        await self._add_album_tracks_buttons(inline_keyboard, album)
+        self._add_control_buttons(inline_keyboard)
+        return agt.InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
+
+    async def _add_albums_buttons(self, inline_keyboard):
+        _, page = self._pages[self._current_page]
+
+        # set track buttons
+        for get_album_com, album in page:
+            inline_keyboard.append([
+                agt.InlineKeyboardButton(
+                    text=uic.build_album_button_name(
+                        album.performer,
+                        album.title,
+                        album.size,
+                        album.plays,
+                        album.tracks is not None,
+                    ),
+                    callback_data=str(get_album_com),
+                )
+            ])
+
+    async def _add_album_tracks_buttons(self, inline_keyboard, album):
+        tracks = self.tracks_by_album.get(album.get_id())
+        if tracks is None:
+            await album.load_tracks()
+            tracks = []
+            for t in album.tracks:
+                send_track_command_id = self._manager.commander.create_command(
+                    self.send_track, t)
+                tracks.append((send_track_command_id, t))
+            self.tracks_by_album[album.get_id()] = tracks
+
+        track_ids_for_page = [t.get_id() for _, t in tracks]
+        tracks_in_cache = set(
+            await self._manager.cache.check_cache(track_ids_for_page)
+        )
+        # set track buttons
+        for get_track_com, track in tracks[:90]:
+            duration = time.gmtime(track.duration)
+            inline_keyboard.append([
+                agt.InlineKeyboardButton(
+                    text=uic.build_track_button_name(
+                        track.performer,
+                        track.title,
+                        duration,
+                        track.get_id() in tracks_in_cache
+                    ),
+                    callback_data=str(get_track_com),
+                )
+            ])
+
+        if len(tracks) > 90:
+            inline_keyboard.append([
+                agt.InlineKeyboardButton(
+                    text=uic.ALBUM_IS_TOO_LONG,
+                    callback_data=str(self._manager.commander.DO_NOTHING),
+                )
+            ])
+
+    def _add_control_buttons(self, inline_keyboard):
+        current_page_com, _ = self._pages[self._current_page]
+        inline_keyboard.append([
+            agt.InlineKeyboardButton(
+                text=uic.BACK,
+                callback_data=str(current_page_com),
+            )
+        ])
+
+    async def send_album_list(self, _: agt.CallbackQuery, album: Album):
+        self.logger.info('Switch page to Album: %s', album.full_name)
+        self.reload_deadline()
+
+        keyboard = await self.construct_album_page(album)
+        await self.tg_bot.edit_message(
+            self._message,
+            self.finded_message(),
+            reply_markup=keyboard,
+            disable_web_page_preview=True
+        )
+
+
+

@@ -1,4 +1,3 @@
-import asyncio
 from dataclasses import dataclass
 from typing import AsyncGenerator
 
@@ -6,12 +5,12 @@ import asynciolimiter
 from vk_api import VkApi
 from vk_api.audio import VkAudio
 
-from root.models import Track
+from root.models import Track, Album
 # from audio import VkAudio
 # from async_extend import AsyncVkApi, AsyncVkAudio
 
 from root.sections.base import AbstractSection
-from root.utils.m3u8_to_mp3 import m3u8_to_mp3_advanced_direct, M3u8Loader
+from root.utils.m3u8_to_mp3 import M3u8Loader
 
 
 @dataclass
@@ -27,6 +26,37 @@ class VkTrack(Track):
 
     def get_id(self) -> str:
         return str(self.vtrack['id']) + '_' + str(self.vtrack['owner_id'])
+
+
+@dataclass
+class VkAlbum(Album):
+    section: 'VkSection'
+    valbum: dict
+    audio: VkAudio
+
+    @property
+    def plays(self):
+        return self.valbum['plays']
+
+    def get_id(self) -> str:
+        return str(self.valbum['id']) + '_' + str(self.valbum['owner_id'])
+
+    async def load_tracks(self):
+        self.tracks = []
+        for raw_track in self.audio.get_iter(
+                owner_id=self.valbum['owner_id'],
+                album_id=self.valbum['id'],
+                access_hash=self.valbum['access_hash']
+        ):
+            track = VkTrack(
+                self.section,
+                raw_track['title'],
+                raw_track['artist'],
+                raw_track['duration'],
+                raw_track,
+                self.audio
+            )
+            self.tracks.append(track)
 
 
 class VkSection(AbstractSection):
@@ -85,5 +115,17 @@ class VkSection(AbstractSection):
                 track['artist'],
                 track['duration'],
                 track,
+                self.audio
+            )
+
+    async def get_albums_gen(self, query: str) -> AsyncGenerator[Track, None]:
+        for album in self.audio.search_albums_iter(q=query):
+            yield VkAlbum(
+                self,
+                album['title'],
+                album['artist'],
+                album['count'],
+                None,
+                album,
                 self.audio
             )

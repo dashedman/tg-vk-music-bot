@@ -16,3 +16,6 @@ class AbstractSection(ABC):
 
     @abstractmethod
     async def get_popular_songs(self) -> AsyncGenerator['root.models.Track', None]: ...
+
+    @abstractmethod
+    async def get_albums_gen(self, query: str) -> AsyncGenerator['root.models.Album', None]: ...
