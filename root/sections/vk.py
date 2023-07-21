@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import AsyncGenerator
 
 import asynciolimiter
+import vk_api.exceptions
 from vk_api import VkApi
 from vk_api.audio import VkAudio
 
@@ -85,8 +86,8 @@ class VkSection(AbstractSection):
     def auth_handler(self):
         raise Exception('Auth Handler used!')
 
-    async def get_tracks_gen(self, query: str) -> AsyncGenerator[Track, None]:
-        for track in self.audio.search_iter(q=query):
+    def _wrap_track(self, tracks_gen):
+        for track in tracks_gen:
             yield VkTrack(
                 self,
                 track['title'],
@@ -96,30 +97,8 @@ class VkSection(AbstractSection):
                 self.audio
             )
 
-    async def get_new_songs(self) -> AsyncGenerator[Track, None]:
-        for track in self.audio.get_news_iter():
-            yield VkTrack(
-                self,
-                track['title'],
-                track['artist'],
-                track['duration'],
-                track,
-                self.audio
-            )
-
-    async def get_popular_songs(self) -> AsyncGenerator[Track, None]:
-        for track in self.audio.get_popular_iter():
-            yield VkTrack(
-                self,
-                track['title'],
-                track['artist'],
-                track['duration'],
-                track,
-                self.audio
-            )
-
-    async def get_albums_gen(self, query: str) -> AsyncGenerator[Track, None]:
-        for album in self.audio.search_albums_iter(q=query):
+    def _wrap_album(self, albums_gen):
+        for album in albums_gen:
             yield VkAlbum(
                 self,
                 album['title'],
@@ -129,3 +108,35 @@ class VkSection(AbstractSection):
                 album,
                 self.audio
             )
+
+    async def get_tracks_gen(self, query: str) -> AsyncGenerator[Track, None]:
+        for t in self._wrap_track(self.audio.search_iter(q=query)):
+            yield t
+
+    async def get_new_songs(self) -> AsyncGenerator[Track, None]:
+        for t in self._wrap_track(self.audio.get_news_iter()):
+            yield t
+
+    async def get_popular_songs(self) -> AsyncGenerator[Track, None]:
+        for t in self._wrap_track(self.audio.get_popular_iter()):
+            yield t
+
+    async def get_albums_gen(self, query: str) -> AsyncGenerator[Track, None]:
+        for a in self._wrap_album(self.audio.search_albums_iter(q=query)):
+            yield a
+
+    async def get_tracks_gen_by_id(self, owner_id) -> AsyncGenerator[Track, None]:
+        try:
+            for t in self._wrap_track(self.audio.get_iter(owner_id=owner_id)):
+                yield t
+        except vk_api.exceptions.AccessDenied:
+            return
+
+    async def get_album_gen_by_id(self, owner_id, album_id) -> AsyncGenerator[Track, None]:
+        try:
+            for t in self._wrap_track(
+                    self.audio.get_iter(owner_id=owner_id, album_id=album_id)
+            ):
+                yield t
+        except vk_api.exceptions.AccessDenied:
+            return

@@ -351,6 +351,22 @@ class MusicBot:
             albums_gen = await self.find_albums_gen(expression)
             self.pagers_manager.create_albums_pager(message, albums_gen, expression)
 
+        @dispatcher.message_handler(commands=["link", "l"])
+        async def link_handler(message: types.Message):
+            # processing command /popular
+            # send popular inline keyboard to user
+            command, expression = message.get_full_command()
+
+            if 'z=audio_playlist' in expression:
+                full_id = expression.split('z=audio_playlist', 1)[1].split('&', 1)[0]
+
+                album_gen = self.vk.get_album_gen_by_id(*full_id.split('_'))
+                self.pagers_manager.create_pager(message, album_gen, expression)
+            elif 'audios' in expression:
+                owner_id = expression.split('audios', 1)[1].split('?', 1)[0]
+                tracks_gen = self.vk.get_tracks_gen_by_id(owner_id)
+                self.pagers_manager.create_pager(message, tracks_gen, expression)
+
         @dispatcher.message_handler(commands=["help"])
         @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["help"]))
         async def help_handler(message: types.Message):

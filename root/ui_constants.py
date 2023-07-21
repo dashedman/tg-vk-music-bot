@@ -117,6 +117,11 @@ HELP_TEXT = """❓ Help
 Пример: "/albums Nevermind"
 Пример: "/a Nevermind"
 
+/link - загрузить песни пользователя или альбома по ссылке.
+Синоним: /l
+Пример: "/link https://vk.com/audios1?z=audio_playlist-2000127867_127867%2Fbe048000676c6e7a0c"
+Пример: "/l https://vk.com/audios1?z=audio_playlist-2000127867_127867%2Fbe048000676c6e7a0c"
+
 /review - написать разработчику
 Синоним: /r
 Пример: "/review Привет!"
