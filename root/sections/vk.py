@@ -21,7 +21,10 @@ class VkTrack(Track):
     audio: VkAudio
 
     async def load_audio(self, codec: str = 'mp3') -> bytes | None:
-        m3u8_url = self.vtrack['url'][:self.vtrack['url'].rfind('?')]
+        if '?' in self.vtrack['url']:
+            m3u8_url = self.vtrack['url'][:self.vtrack['url'].rfind('?')]
+        else:
+            m3u8_url = self.vtrack['url']
         new_audio = await self.section.m3u8_loader.m3u8_to_mp3_wraped(m3u8_url)
         return new_audio
 
