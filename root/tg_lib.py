@@ -1,12 +1,12 @@
 import time
 import sqlite3
-import json
 import asyncio
 
-class DictionaryBomb():
-    def __init__(self, dict, key, timer=0):
+
+class DictionaryBomb:
+    def __init__(self, dict_, key, timer=0):
         self.timer = timer
-        self.dict = dict
+        self.dict = dict_
         self.key = key
 
     def replant(self, timer):
@@ -22,8 +22,7 @@ def auth_handler():
     return input("Key code:"), False
 
 
-
-async def get_music_list(generator, current_page=1, list_length = 1):
+async def get_music_list(generator, current_page=1, list_length=1):
     NEXT_PAGE_FLAG = False
     musiclist = []
     try:
@@ -32,7 +31,7 @@ async def get_music_list(generator, current_page=1, list_length = 1):
     except StopIteration:
         pass
     else:
-        for i in range(list_length-1):
+        for i in range(list_length - 1):
             try:
                 next_track = next(generator)
                 if next_track['id'] == musiclist[0]['id'] and next_track['owner_id'] == musiclist[0]['owner_id']:
@@ -47,8 +46,8 @@ async def get_music_list(generator, current_page=1, list_length = 1):
                  NEXT_PAGE_FLAG = True
             except StopIteration:
                 pass
-
     return musiclist, NEXT_PAGE_FLAG
+
 
 def db_get_audio(db, audio_id):
     with db:

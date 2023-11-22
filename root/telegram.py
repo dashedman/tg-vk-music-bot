@@ -6,20 +6,10 @@ from asyncio import Future
 from typing import Coroutine
 
 import asynciolimiter
-import cachetools as cachetools
-from aiogram import Bot, Dispatcher, types
+import cachetools
+
+from aiogram import Bot, Dispatcher
 from aiogram.types.inline_keyboard import InlineKeyboardMarkup, InlineKeyboardButton as IKB
-from aiogram.types.reply_keyboard import ReplyKeyboardMarkup, KeyboardButton as RKB
-
-from aiogram.dispatcher.filters import AdminFilter, Text, ContentTypeFilter, ChatTypeFilter
-from aiogram.dispatcher.filters.builtin import IDFilter
-from aiogram.dispatcher.handler import CancelHandler, current_handler
-
-from aiogram.dispatcher import webhook
-from aiogram.utils import markdown as md
-from aiogram.utils.executor import start_polling, start_webhook
-from aiogram.utils import exceptions
-from aiogram.utils.exceptions import BotBlocked, ChatNotFound, UserDeactivated
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 import aiogram.types as agt
 
@@ -53,7 +43,10 @@ class TelegramHandler:
             duration = time.gmtime(track.duration)
             inline_keyboard.append([
                 IKB(
-                    text=html.unescape(f"{track.performer} - {track.title} ({duration.tm_min}:{duration.tm_sec:02})".replace("$#", "&#")),
+                    text=html.unescape(
+                        f"{track.performer} - {track.title} ({duration.tm_min}:{duration.tm_sec:02})"
+                        .replace("$#", "&#")
+                    ),
                     callback_data=str(command_id),
                 )
             ])

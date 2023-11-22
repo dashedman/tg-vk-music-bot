@@ -1,6 +1,7 @@
 # standart libs
 import asyncio
 import os
+import re
 import ssl
 from copy import deepcopy
 from logging import Logger
@@ -468,7 +469,9 @@ class MusicBot:
                     return
 
             # TODO: if zero length state to find
-
+            if re.match(r'https?://', expression.strip()) is not None:
+                await self.telegram.delete_message(message)
+                return
             tracks_gen = await self.find_tracks_gen(expression)
             self.pagers_manager.create_pager(message, tracks_gen, expression)
 
