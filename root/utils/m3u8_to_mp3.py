@@ -2,6 +2,7 @@ import asyncio
 import binascii
 import os
 import random
+import ssl
 import time
 
 import m3u8
@@ -32,14 +33,14 @@ def get_key(data):
 def read_keys(path):
     content = b""
 
-    data_response = urlopen(path)
+    data_response = urlopen(path, context=ssl._create_unverified_context())
     content = data_response.read()
 
     return content
 
 
 def get_ts(url):
-    data = m3u8.load(url)
+    data = m3u8.load(url, verify_ssl=False)
     key_link = get_key(data)
     ts_content = b""
     key = None
