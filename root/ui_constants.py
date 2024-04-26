@@ -18,10 +18,12 @@ class Signer:
 
     def get_signature(self, performer: str):
         filtered_performer = re.sub(
-            r'[.,;:!?%\'"`\\|/]',
-            '',
+            r'\s+',
+            '_',
             re.sub(
-               r'\s', '_', performer
+                r'[.,;:!?%\'"`\\|/()\-&]',
+                '',
+                performer
             )
         )
         return md.hitalic(f'#{filtered_performer}, {self.signature_base}')
