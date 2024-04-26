@@ -25,7 +25,7 @@ class Signer:
                 '',
                 performer
             )
-        )
+        ).strip('_')
         return md.hitalic(f'#{filtered_performer}, {self.signature_base}')
 
 
