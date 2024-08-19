@@ -1,19 +1,17 @@
 import asyncio
-import io
 import logging
 import time
 from collections import defaultdict
 from typing import AsyncIterable
 
 import aiogram.types as agt
-import aiogram.utils.exceptions
+from aiogram.exceptions import TelegramAPIError
 
 import aitertools
 import root
 import root.ui_constants as uic
 from root.commander import CommandId
 from root.models import Track, Album
-from root.tracks_cache import CacheAnswer
 
 
 class PagersManager:
@@ -249,8 +247,8 @@ class Pager:
                 reply_markup=keyboard,
                 disable_web_page_preview=True
             )
-        except aiogram.utils.exceptions.MessageNotModified:
-            pass
+        except TelegramAPIError as e:
+            self.logger.error('Catch while edit keyboard:', exc_info=e)
 
     async def get_entities_for_page(self, page_size: int = 10) -> list[(CommandId, Track)]:
         tracks = []

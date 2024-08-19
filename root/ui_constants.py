@@ -3,7 +3,7 @@ import time
 import re
 
 import aiogram.utils.markdown as md
-from aiogram.types.reply_keyboard import ReplyKeyboardMarkup, KeyboardButton as RKB
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 
 
 def unescape(s: str):
@@ -75,13 +75,13 @@ ALBUM_IS_TOO_LONG = '... Album is too long ...'
 
 
 MAIN_KEYBOARD = ReplyKeyboardMarkup(keyboard=[
-    [RKB(text='👑 Popular'), RKB(text='🆕 New songs')],
-    [RKB(text='❓ Help')],
-    [RKB(text='🔨 Settings'),    RKB(text='📔 About')]
+    [KeyboardButton(text='👑 Popular'), KeyboardButton(text='🆕 New songs')],
+    [KeyboardButton(text='❓ Help')],
+    [KeyboardButton(text='🔨 Settings'),    KeyboardButton(text='📔 About')]
 ], resize_keyboard=True, one_time_keyboard=True, selective=True)
 
 SETTINGS_KEYBOARD = [
-    [RKB(text='↩️ Back')]
+    [KeyboardButton(text='↩️ Back')]
 ]
 
 KEYBOARD_COMMANDS = {
@@ -97,7 +97,7 @@ KEYBOARD_COMMANDS = {
 }
 
 
-HELP_TEXT = """❓ Help
+HELP_TEXT = f"""❓ Help
 /start - получить основную клавиатуру.
 
 /help - рекурсия...
@@ -105,8 +105,8 @@ HELP_TEXT = """❓ Help
 
 /find - искать музыку🔍. Чтобы воспользоватся после команды надо написать название или автора произведения.
 Синоним: /f
-Пример: "/find zoom - last dinosaurs"
-Пример: "/f zoom - last dinosaurs"
+Пример: {md.hcode('/find zoom - last dinosaurs')}
+Пример: {md.hcode('/f zoom - last dinosaurs')}
 
 /popular - получить список самых популярных треков.
 Синоним: /chart
@@ -116,18 +116,18 @@ HELP_TEXT = """❓ Help
 
 /albums - искать альбомы🔍. Чтобы воспользоватся после команды надо написать название альбома.
 Синоним: /a
-Пример: "/albums Nevermind"
-Пример: "/a Nevermind"
+Пример: {md.hcode('/albums Nevermind')}
+Пример: {md.hcode('/a Nevermind')}
 
 /link - загрузить песни пользователя или альбома по ссылке.
 Синоним: /l
-Пример: "/link https://vk.com/audios1?z=audio_playlist-2000127867_127867%2Fbe048000676c6e7a0c"
-Пример: "/l https://vk.com/audios1?z=audio_playlist-2000127867_127867%2Fbe048000676c6e7a0c"
+Пример: {md.hcode('/link https://vk.com/audios1?z=audio_playlist-2000127867_127867%2Fbe048000676c6e7a0c')}
+Пример: {md.hcode('/l https://vk.com/audios1?z=audio_playlist-2000127867_127867%2Fbe048000676c6e7a0c')}
 
 /review - написать разработчику
 Синоним: /r
-Пример: "/review Привет!"
-Пример: "/r Привет!"
+Пример: {md.hcode('/review Привет!')}
+Пример: {md.hcode('/r Привет!')}
 
 
 Для админов чатов:
@@ -137,7 +137,7 @@ HELP_TEXT = """❓ Help
 
 Публичный мод - мод в котором бот читает все сообщения и воспринимает их как запрос к поиску /find.
 Если мод отключен, бот реагирует только на команды.
-Чтобы бот игнорировал любые сообщения добавте '\\' в началоо сообщения
+Чтобы бот игнорировал любые сообщения добавьте '\\' в началоо сообщения
 """
 
 VIPHELP_TEXT = """
@@ -151,7 +151,7 @@ VIPHELP_TEXT = """
 
 ABOUT_TEXT = """📔 About!
 📫 For any questions: @dashed_man
-py3.11"""
+py3.12"""
 
 
 def queue_is_full():
@@ -167,7 +167,7 @@ def starting_download(title: str, artist: str):
 
 
 def build_review_info(message):
-    return f"Review from {md.quote_html(message.from_user.mention)}" \
+    return f"Review from {message.from_user.mention_html()}" \
            f"(user: {md.hcode(message.from_user.id)}, " \
            f"chat: {md.hcode(message.chat.id)})" \
            f"{'[is a bot]' if message.from_user.is_bot else ''}"

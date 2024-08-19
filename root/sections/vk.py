@@ -77,9 +77,11 @@ class VkSection(AbstractSection):
             auth_handler=self.auth_handler,
             token=self.config['access_token'],
         )
+        # self.session.http.headers['User-agent'] = \
+        #     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0)' \
+        #     ' Gecko/20100101 Firefox/94.0'
         self.session.http.headers['User-agent'] = \
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:94.0)' \
-            ' Gecko/20100101 Firefox/94.0'
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0'
         self.session.auth()
 
         self.audio = VkAudio(self.session)

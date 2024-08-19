@@ -1,5 +1,4 @@
 import asyncio
-import io
 import logging
 import time
 from dataclasses import dataclass
@@ -131,8 +130,8 @@ class LoadsDemon:
             self.tg_bot.delete_message(message),
             self.tg_bot.answer_audio(
                 msg=message,
-                audio=agt.InputFile(
-                    io.BytesIO(track_data),
+                audio=agt.BufferedInputFile(
+                    file=track_data,
                     filename=f"{track.performer[:32]}_{track.title[:32]}.mp3",
                 ),
                 title=track.title,

@@ -1,8 +1,6 @@
 import os
-from dataclasses import dataclass
 
 from configparser import ConfigParser
-
 
 # internal lib
 from root import MusicBot
@@ -10,11 +8,7 @@ import root.ui_constants as uic
 from root.log_lib import get_logger
 
 
-# constants
-
-
 if __name__ == "__main__":
-
     config_path = "../config.ini"
     if not os.path.exists(config_path):
         print(uic.NO_CONFIG_MESSAGE)

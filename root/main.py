@@ -2,39 +2,35 @@
 import asyncio
 import os
 import re
-import ssl
 from copy import deepcopy
 from logging import Logger
 
 from pprint import pformat
 
+from aiogram.enums import ContentType
+from aiogram.filters import CommandStart, Command
+from aiogram.utils.serialization import deserialize_telegram_object_to_python
 from gevent.threadpool import ThreadPoolExecutor as GeventPoolExecutor
-from aiogram.types import ReplyKeyboardMarkup
+from aiogram.types import ReplyKeyboardMarkup, InlineKeyboardButton, KeyboardButton, ErrorEvent
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 # eternal libs
-from aiogram import types
-from aiogram.dispatcher import webhook
-from aiogram.dispatcher.filters import Text, IDFilter, AdminFilter, ChatTypeFilter, ContentTypeFilter
-from aiogram.utils import exceptions
-from aiogram.utils.executor import start_polling
-from aiogram.types.inline_keyboard import InlineKeyboardButton as IKB
-from aiohttp import web
+import aiogram.exceptions as exceptions
+from aiogram import types, F
 
 # internal lib
 
 import root.ui_constants as uic
 
-import root.utils.utils as utils
 from root import db_models
 from root.commander import CallbackCommander
 from root.constants import Constants
 from root.loads_demon import LoadsDemon
 from root.pager import PagersManager
 # from root.sections.soundcloud import SoundcloudSection
-from root.telegram import TelegramHandler
+from root.telegram import TelegramHandler, AdminFilter, get_full_command
 from root.sections.vk import VkSection
 from root.tracks_cache import TracksCache
 
@@ -167,25 +163,27 @@ class MusicBot:
         """
         try:
             await self.telegram.bot.send_message(user_id, text, disable_notification=disable_notification)
-        except exceptions.BotBlocked:
-            self.logger.error(f"Target [ID:{user_id}]: blocked by user")
-        except exceptions.ChatNotFound:
-            self.logger.error(f"Target [ID:{user_id}]: invalid chat ID")
-        except exceptions.RetryAfter as e:
-            self.logger.error(f"Target [ID:{user_id}]: Flood limit is exceeded. Sleep {e.timeout} seconds.")
-            await asyncio.sleep(e.timeout)
-            return await self.send_message(user_id, text)  # Recursive call
-        except exceptions.UserDeactivated:
-            self.logger.error(f"Target [ID:{user_id}]: user is deactivated")
-        except exceptions.BadRequest:
-            self.logger.exception(f"Target [ID:{user_id}]: bad request")
-        except exceptions.TelegramAPIError:
-            self.logger.exception(f"Target [ID:{user_id}]: failed")
+        except exceptions.TelegramAPIError as e:
+            self.logger.error(f'Catch error from tg: {e}', exc_info=e)
+            raise Exception('Undefined exception!')
+            # self.logger.error(f"Target [ID:{user_id}]: blocked by user")
+        # except exceptions.ChatNotFound:
+        #     self.logger.error(f"Target [ID:{user_id}]: invalid chat ID")
+        # except exceptions.RetryAfter as e:
+        #     self.logger.error(f"Target [ID:{user_id}]: Flood limit is exceeded. Sleep {e.timeout} seconds.")
+        #     await asyncio.sleep(e.timeout)
+        #     return await self.send_message(user_id, text)  # Recursive call
+        # except exceptions.UserDeactivated:
+        #     self.logger.error(f"Target [ID:{user_id}]: user is deactivated")
+        # except exceptions.BadRequest:
+        #     self.logger.exception(f"Target [ID:{user_id}]: bad request")
+        # except exceptions.TelegramAPIError:
+        #     self.logger.exception(f"Target [ID:{user_id}]: failed")
         else:
             return True
         return False
 
-    async def on_startup(self, _):
+    async def on_startup(self):
         if self.config['network'].getboolean('is_webhook'):
             webhook_info = await self.telegram.bot.get_webhook_info()
             self.logger.info("Old webhook:\n" + pformat(webhook_info.to_python()))
@@ -210,6 +208,8 @@ class MusicBot:
                 self.logger.info(f"WebHook wasn't set!")
                 Exception("Webhook wasn't set!")
             self.logger.info(f"WebHook successful set!")
+        else:
+            await self.telegram.bot.delete_webhook(drop_pending_updates=True)
 
         self.logger.info("Starting demons...")
         self.demons.extend([
@@ -219,14 +219,14 @@ class MusicBot:
         ])
 
         self.signer = uic.Signer()
-        self.signer.set_signature((await self.telegram.bot.me).mention)
+        self.signer.set_signature((await self.telegram.bot.me()).mention_html())
 
         # await self.vk.prepare()
 
         # await vk_api.audio.set_user_id((await vk_api.users.get(return_raw_response = True))['response'][0]['id'])
         # await vk_api.audio.set_client_session(vk_client)
 
-    async def on_shutdown(self, _):
+    async def on_shutdown(self):
         self.logger.info("Killing demons...")
         for demon in self.demons:
             demon.cancel()
@@ -234,76 +234,75 @@ class MusicBot:
 
         await self.telegram.bot.delete_webhook()
         await self.telegram.dispatcher.storage.close()
-        await self.telegram.dispatcher.storage.wait_closed()
 
     def start(self):
         self.initialize_handlers()
 
         if self.config['network'].getboolean('is_webhook'):
-            app = webhook.get_new_configured_app(
-                dispatcher=self.telegram.dispatcher,
-                path=self.config['network']['path'],
-            )
-            app.on_startup.append(self.on_startup)
-            app.on_shutdown.append(self.on_shutdown)
-
-            context = None
-            if self.config['ssl'].getboolean('self'):
-                # create ssl for webhook
-                utils.create_self_signed_cert(self.config['network'], self.config['ssl'])
-                context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
-                context.load_cert_chain(
-                    os.path.join(self.config['ssl']['dir'], self.config['ssl']['cert_filename']),
-                    keyfile=os.path.join(self.config['ssl']['dir'], self.config['ssl']['key_filename'])
-                )
-
-            web.run_app(
-                app,
-                host=self.config['network']['host'],
-                port=self.config['network'].getint('port'),
-                ssl_context=context
-            )
+            raise NotImplementedError
+            # app = webhook.get_new_configured_app(
+            #     dispatcher=self.telegram.dispatcher,
+            #     path=self.config['network']['path'],
+            # )
+            # app.on_startup.append(self.on_startup)
+            # app.on_shutdown.append(self.on_shutdown)
+            #
+            # context = None
+            # if self.config['ssl'].getboolean('self'):
+            #     # create ssl for webhook
+            #     utils.create_self_signed_cert(self.config['network'], self.config['ssl'])
+            #     context = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
+            #     context.load_cert_chain(
+            #         os.path.join(self.config['ssl']['dir'], self.config['ssl']['cert_filename']),
+            #         keyfile=os.path.join(self.config['ssl']['dir'], self.config['ssl']['key_filename'])
+            #     )
+            #
+            # web.run_app(
+            #     app,
+            #     host=self.config['network']['host'],
+            #     port=self.config['network'].getint('port'),
+            #     ssl_context=context
+            # )
         else:
-            start_polling(
-                dispatcher=self.telegram.dispatcher,
-                on_startup=self.on_startup,
-                on_shutdown=self.on_shutdown,
-                skip_updates=True
-            )
+            self.telegram.dispatcher.startup.register(self.on_startup)
+            self.telegram.dispatcher.shutdown.register(self.on_shutdown)
+            self.telegram.dispatcher.run_polling(self.telegram.bot)
 
     def initialize_handlers(self):
         dispatcher = self.telegram.dispatcher
-        dashboard_filter = IDFilter(user_id=self.config['telegram']['dashboard'])
+        dashboard_filter = F.from_user.id == self.config['telegram'].getint('dashboard')
         admin_filter = AdminFilter()
-        private_chat_filter = ChatTypeFilter(types.chat.ChatType.PRIVATE)
+        # TODO: review
+        # private_chat_filter = ChatTypeFilter(types.chat.ChatType.PRIVATE)
+
         # ============= HANDLERS ============
 
-        @dispatcher.message_handler(commands=["start"])
-        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["start"]))
+        @dispatcher.message(CommandStart())
+        @dispatcher.message(F.text == uic.KEYBOARD_COMMANDS["start"])
         async def start_handler(message: types.Message):
             # processing command /start
             # send keyboard to user
             await self.telegram.reply_message(message, f"Keyboard for...", reply_markup=uic.MAIN_KEYBOARD)
 
-        @dispatcher.message_handler(commands=["settings"])
-        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["settings"]))
+        @dispatcher.message(Command("settings"))
+        @dispatcher.message(F.text == uic.KEYBOARD_COMMANDS["settings"])
         async def settings_handler(message: types.Message):
             # processing command /settings
             await return_settings(message, uic.SETTINGS)
 
-        @dispatcher.message_handler(admin_filter, commands=["all_mode_on"])
-        @dispatcher.message_handler(admin_filter, Text(equals=uic.KEYBOARD_COMMANDS["all_mode_on"]))
-        @dispatcher.message_handler(private_chat_filter, commands=["all_mode_on"])
-        @dispatcher.message_handler(private_chat_filter, Text(equals=uic.KEYBOARD_COMMANDS["all_mode_on"]))
+        @dispatcher.message(admin_filter, Command("all_mode_on"))
+        @dispatcher.message(admin_filter, F.text == uic.KEYBOARD_COMMANDS["all_mode_on"])
+        # @dispatcher.message(private_chat_filter, Command("all_mode_on"))
+        # @dispatcher.message(private_chat_filter, F.text == uic.KEYBOARD_COMMANDS["all_mode_on"])
         async def all_mode_on_handler(message: types.Message):
             # processing command /about
             await self.change_free_mode(message.chat, True)
             await return_settings(message, uic.MODE_ON)
 
-        @dispatcher.message_handler(admin_filter, commands=["all_mode_off"])
-        @dispatcher.message_handler(admin_filter, Text(equals=uic.KEYBOARD_COMMANDS["all_mode_off"]))
-        @dispatcher.message_handler(private_chat_filter, commands=["all_mode_off"])
-        @dispatcher.message_handler(private_chat_filter, Text(equals=uic.KEYBOARD_COMMANDS["all_mode_off"]))
+        @dispatcher.message(admin_filter, Command("all_mode_off"))
+        @dispatcher.message(admin_filter, F.text == uic.KEYBOARD_COMMANDS["all_mode_off"])
+        # @dispatcher.message(private_chat_filter, Command("all_mode_off"))
+        # @dispatcher.message(private_chat_filter, F.text == uic.KEYBOARD_COMMANDS["all_mode_off"])
         async def all_mode_off_handler(message: types.Message):
             # processing command /about
             await self.change_free_mode(message.chat, False)
@@ -311,7 +310,7 @@ class MusicBot:
 
         async def return_settings(message: types.Message, msg_text: str):
             tmp_settings_keyboard = deepcopy(uic.SETTINGS_KEYBOARD)
-            tmp_settings_keyboard.append([IKB(text=(
+            tmp_settings_keyboard.append([KeyboardButton(text=(
                 uic.KEYBOARD_COMMANDS['all_mode_off']
                 if await self.check_free_mode(message.chat)
                 else uic.KEYBOARD_COMMANDS['all_mode_on']
@@ -327,36 +326,36 @@ class MusicBot:
                 )
             )
 
-        @dispatcher.message_handler(commands=["new_songs", "novelties"])
-        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["new_songs"]))
+        @dispatcher.message(Command("new_songs", "novelties"))
+        @dispatcher.message(F.text == uic.KEYBOARD_COMMANDS["new_songs"])
         async def new_songs_handler(message: types.Message):
             # processing command /new_songs
             # send news inline keyboard to user
             tracks_gen = await self.new_tracks_gen()
             self.pagers_manager.create_pager(message, tracks_gen, uic.KEYBOARD_COMMANDS["new_songs"])
 
-        @dispatcher.message_handler(commands=["popular", "chart"])
-        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["popular"]))
+        @dispatcher.message(Command("popular", "chart"))
+        @dispatcher.message(F.text == uic.KEYBOARD_COMMANDS["popular"])
         async def chart_handler(message: types.Message):
             # processing command /popular
             # send popular inline keyboard to user
             tracks_gen = await self.popular_tracks_gen()
             self.pagers_manager.create_pager(message, tracks_gen, uic.KEYBOARD_COMMANDS["popular"])
 
-        @dispatcher.message_handler(commands=["albums", "a"])
+        @dispatcher.message(Command("albums", "a"))
         async def albums_handler(message: types.Message):
             # processing command /popular
             # send popular inline keyboard to user
-            command, expression = message.get_full_command()
+            command, expression = get_full_command(message)
 
             albums_gen = await self.find_albums_gen(expression)
             self.pagers_manager.create_albums_pager(message, albums_gen, expression)
 
-        @dispatcher.message_handler(commands=["link", "l"])
+        @dispatcher.message(Command("link", "l"))
         async def link_handler(message: types.Message):
             # processing command /popular
             # send popular inline keyboard to user
-            command, expression = message.get_full_command()
+            command, expression = get_full_command(message)
 
             if 'z=audio_playlist' in expression:
                 full_id = expression.split('z=audio_playlist', 1)[1].split('&', 1)[0]
@@ -368,23 +367,21 @@ class MusicBot:
                 tracks_gen = self.vk.get_tracks_gen_by_id(owner_id)
                 self.pagers_manager.create_pager(message, tracks_gen, expression)
 
-        @dispatcher.message_handler(commands=["help"])
-        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["help"]))
+        @dispatcher.message(Command("help"))
+        @dispatcher.message(F.text == uic.KEYBOARD_COMMANDS["help"])
         async def help_handler(message: types.Message):
             # processing command /help
             await message.reply(uic.HELP_TEXT)
 
-        @dispatcher.message_handler(commands=["about"])
-        @dispatcher.message_handler(Text(equals=uic.KEYBOARD_COMMANDS["about"]))
+        @dispatcher.message(Command("about"))
+        @dispatcher.message(F.text == uic.KEYBOARD_COMMANDS["about"])
         async def about_handler(message: types.Message):
             # processing command /about
             await message.reply(uic.ABOUT_TEXT)
 
-        @dispatcher.message_handler(commands=["review", "r"],
-                                    commands_ignore_caption=False,
-                                    content_types=types.ContentType.ANY)
+        @dispatcher.message(Command("review", "r"))
         async def review_handler(message: types.Message):
-            command, msg_for_dev = message.get_full_command()
+            command, msg_for_dev = get_full_command(message)
             if len(msg_for_dev) == 0:
                 await message.reply(uic.EMPTY)
                 return
@@ -404,31 +401,28 @@ class MusicBot:
                 )
 
                 await message.answer(uic.SENDED)
-            except exceptions.BadRequest:
+            except exceptions.TelegramAPIError:
                 await message.answer(uic.ERROR)
             except Exception:
                 await message.answer(uic.ERROR)
                 raise
             return
 
-        @dispatcher.message_handler(dashboard_filter, commands=["vipinfo"])
+        @dispatcher.message(dashboard_filter, Command("vipinfo"))
         async def send_info(message: types.Message):
-            await message.answer("```\n" + pformat(message.to_python()) + "```", parse_mode="markdown")
+            await message.answer("```\n" + pformat(deserialize_telegram_object_to_python(message)) + "```", parse_mode="markdown")
 
-        @dispatcher.message_handler(dashboard_filter, commands=["viphelp"])
+        @dispatcher.message(dashboard_filter, Command("viphelp"))
         async def viphelp_handler(message: types.Message):
             await message.reply(uic.VIPHELP_TEXT)
 
-        @dispatcher.message_handler(dashboard_filter, commands=["err"])
+        @dispatcher.message(dashboard_filter, Command("err"))
         async def all_err_handler(_: types.Message):
             raise Exception("My Err C:")
 
-        @dispatcher.message_handler(dashboard_filter,
-                                    commands=["rep"],
-                                    commands_ignore_caption=False,
-                                    content_types=types.ContentType.ANY)
+        @dispatcher.message(dashboard_filter, Command("rep"))
         async def rep_handler(message: types.Message):
-            command, args_str = message.get_full_command()
+            command, args_str = get_full_command(message)
             chat_id, rep_msg = args_str.split(maxsplit=1)
 
             try:
@@ -445,19 +439,19 @@ class MusicBot:
             else:
                 await message.reply(uic.SENDED)
 
-        @dispatcher.message_handler(Text(startswith='\\'))
+        @dispatcher.message(F.text.startswith('\\'))
         async def ignore_text(_: types.Message):
             pass
 
         find_commands = {"find", "f"}
 
-        @dispatcher.message_handler(commands=find_commands)
-        @dispatcher.message_handler(ContentTypeFilter(["text"]))
+        @dispatcher.message(Command(*find_commands))
+        @dispatcher.message(F.content_type == ContentType.TEXT)
         async def find_handler(message: types.Message):
             # processing command /find
             # send finder inline keyboard to user
 
-            command_set = message.get_full_command()
+            command_set = get_full_command(message=message)
             if command_set:
                 command, expression = command_set
                 if command[1:] not in find_commands:
@@ -475,20 +469,23 @@ class MusicBot:
             tracks_gen = await self.find_tracks_gen(expression)
             self.pagers_manager.create_pager(message, tracks_gen, expression)
 
-        @dispatcher.callback_query_handler()
+        @dispatcher.callback_query()
         async def button_handler(callback_query: types.CallbackQuery):
             await self.callback_commander.execute(callback_query)
 
-        @dispatcher.errors_handler()
-        async def error_handler(info, error):
-            if type(error) in (
-                    exceptions.MessageNotModified,
-                    exceptions.InvalidQueryID
-            ) or str(error) in (
-                    "Replied message not found",
-            ):
-                self.logger.warning(f"{'=' * 3} HandlerError[{error}] {'=' * 3}")
-            else:
-                self.logger.exception(f"\n\n{'=' * 20} HandlerError[{error}] {'=' * 20}\n{pformat(info.to_python())}\n")
+        @dispatcher.errors()
+        async def error_handler(event: ErrorEvent):
+            # if type(error) in (
+            #         exceptions.TelegramAPIError,
+            # ) or str(error) in (
+            #         "Replied message not found",
+            # ):
+            #     self.logger.warning(f"{'=' * 3} HandlerError[{error}] {'=' * 3}")
+            # else:
+            #     self.logger.exception(f"\n\n{'=' * 20} HandlerError[{error}] {'=' * 20}\n{pformat(deserialize_telegram_object_to_python(info))}\n")
+            self.logger.exception(
+                f"\n\n{'=' * 20} HandlerError[{event.exception}] {'=' * 20}\n"
+                f"{pformat(deserialize_telegram_object_to_python(event.update))}\n"
+            )
 
             return True

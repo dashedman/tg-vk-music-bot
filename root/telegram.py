@@ -9,13 +9,46 @@ import asynciolimiter
 import cachetools
 
 from aiogram import Bot, Dispatcher
-from aiogram.types.inline_keyboard import InlineKeyboardMarkup, InlineKeyboardButton as IKB
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.filters import Filter
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils import chat_member
 import aiogram.types as agt
 
 from root.models import Track
 
-from root.utils import ThrottlingMiddleware
+# from root.utils import ThrottlingMiddleware
+
+
+# TODO: move to telegram utils
+class AdminFilter(Filter):
+    async def __call__(self, message: Message) -> bool:
+        return isinstance(message.from_user, chat_member.ADMINS)
+
+
+# TODO: move to telegram utils
+def is_command(message: Message):
+    """
+    Check message text is command
+    :return: bool
+    """
+    text = message.text or message.caption
+    return text and text.startswith("/")
+
+
+# TODO: move to telegram utils
+def get_full_command(message: Message):
+    """
+    Split command and args
+    :return: tuple of (command, args)
+    """
+    if is_command(message):
+        text = message.text or message.caption
+        command, *args = text.split(maxsplit=1)
+        args = args[0] if args else ""
+        return command, args
 
 
 class TelegramHandler:
@@ -24,17 +57,18 @@ class TelegramHandler:
         self.logger = logger
 
         self.logger.info("Telegram autentification...")
-        self.bot = Bot(token=self.config['token'])
+        self.bot = Bot(token=self.config['token'], default=DefaultBotProperties(parse_mode=ParseMode.HTML))
         self.storage = MemoryStorage()
-        self.dispatcher = Dispatcher(self.bot, storage=self.storage)
+        self.dispatcher = Dispatcher(storage=self.storage)
 
         self.alive = False
         self.queue: asyncio.Queue[tuple[int, Coroutine, Future]] = asyncio.Queue(maxsize=50000)
         self.limiters_storage = cachetools.TTLCache(maxsize=10000, ttl=180)
         self.global_limiter = asynciolimiter.Limiter(30)
 
-        middleware = ThrottlingMiddleware(throttling_rate_limit=1.5, silence_cooldown=30)
-        self.dispatcher.middleware.setup(middleware)
+        # TODO
+        # middleware = ThrottlingMiddleware(throttling_rate_limit=1.5, silence_cooldown=30)
+        # self.dispatcher.middleware.setup(middleware)
 
     @staticmethod
     def get_inline_keyboard(commands_to_tracks: dict[int, 'Track']):
@@ -42,7 +76,7 @@ class TelegramHandler:
         for command_id, track in commands_to_tracks:
             duration = time.gmtime(track.duration)
             inline_keyboard.append([
-                IKB(
+                InlineKeyboardButton(
                     text=html.unescape(
                         f"{track.performer} - {track.title} ({duration.tm_min}:{duration.tm_sec:02})"
                         .replace("$#", "&#")
