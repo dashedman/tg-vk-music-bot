@@ -14,7 +14,7 @@ class Signer:
     signature_base: str
 
     def set_signature(self, bot_name: str):
-        self.signature_base = f'via {bot_name}'
+        self.signature_base = bot_name
 
     def get_signature(self, performer: str):
         filtered_performer = re.sub(
@@ -26,7 +26,7 @@ class Signer:
                 performer
             )
         ).strip('_')
-        return md.hitalic(f'#{filtered_performer}, {self.signature_base}')
+        return md.hitalic(f'#{filtered_performer}, via') + self.signature_base
 
 
 YES = "🟢"
