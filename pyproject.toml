@@ -9,7 +9,6 @@ dependencies = [
     "aiogram>=3.20.0.post0",
     "aiohttp>=3.11.18",
     "aiosqlite>=0.21.0",
-    "aitertools>=0.1.0",
     "alembic>=1.15.2",
     "asynciolimiter>=1.2.0",
     "beautifulsoup4>=4.13.4",

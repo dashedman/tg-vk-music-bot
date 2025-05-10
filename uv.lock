@@ -110,12 +110,6 @@ wheels = [
 ]
 
 [[package]]
-name = "aitertools"
-version = "0.1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/0a/9a/12e04eeecccfef606d8745e6d876bef4eec3eb6d771263f9c82bd4fc93ec/aitertools-0.1.0.tar.gz", hash = "sha256:365b51839972ce8ac30acaa4c8682c62bc0678cc21a39709cea4639a2e821249", size = 15261 }
-
-[[package]]
 name = "alembic"
 version = "1.15.2"
 source = { registry = "https://pypi.org/simple" }
@@ -944,7 +938,6 @@ dependencies = [
     { name = "aiogram" },
     { name = "aiohttp" },
     { name = "aiosqlite" },
-    { name = "aitertools" },
     { name = "alembic" },
     { name = "asynciolimiter" },
     { name = "beautifulsoup4" },
@@ -967,7 +960,6 @@ requires-dist = [
     { name = "aiogram", specifier = ">=3.20.0.post0" },
     { name = "aiohttp", specifier = ">=3.11.18" },
     { name = "aiosqlite", specifier = ">=0.21.0" },
-    { name = "aitertools", specifier = ">=0.1.0" },
     { name = "alembic", specifier = ">=1.15.2" },
     { name = "asynciolimiter", specifier = ">=1.2.0" },
     { name = "beautifulsoup4", specifier = ">=4.13.4" },
