@@ -687,7 +687,7 @@ def scrap_ids_from_html(html, filter_root_el=None):
     root_el = soup.find(**filter_root_el)
 
     if root_el is None:
-        raise ValueError('Could not find root el for audio')
+        raise ValueError('Could not find tg_vk_music_bot el for audio')
 
     playlist_snippets = soup.find_all('div', {'class': "audioPlaylistSnippet__list"})
     for playlist in playlist_snippets:

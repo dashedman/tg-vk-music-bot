@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 
-import root.sections.base
+import tg_vk_music_bot.sections.base
 
 
 @dataclass
 class Track:
-    section: 'root.sections.base.AbstractSection'
+    section: 'tg_vk_music_bot.sections.base.AbstractSection'
     title: str
     performer: str
     duration: int
@@ -23,7 +23,7 @@ class Track:
 
 @dataclass
 class Album:
-    section: 'root.sections.base.AbstractSection'
+    section: 'tg_vk_music_bot.sections.base.AbstractSection'
     title: str
     performer: str
     size: int

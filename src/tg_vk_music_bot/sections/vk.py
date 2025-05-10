@@ -6,12 +6,12 @@ import vk_api.exceptions
 from vk_api import VkApi
 from vk_api.audio import VkAudio
 
-from root.models import Track, Album
+from tg_vk_music_bot.models import Track, Album
 # from audio import VkAudio
 # from async_extend import AsyncVkApi, AsyncVkAudio
 
-from root.sections.base import AbstractSection
-from root.utils.m3u8_to_mp3 import M3u8Loader
+from tg_vk_music_bot.sections.base import AbstractSection
+from tg_vk_music_bot.utils.m3u8_to_mp3 import M3u8Loader
 
 
 @dataclass

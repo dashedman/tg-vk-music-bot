@@ -10,8 +10,7 @@ from pprint import pformat
 from aiogram.enums import ContentType
 from aiogram.filters import CommandStart, Command
 from aiogram.utils.serialization import deserialize_telegram_object_to_python
-from gevent.threadpool import ThreadPoolExecutor as GeventPoolExecutor
-from aiogram.types import ReplyKeyboardMarkup, InlineKeyboardButton, KeyboardButton, ErrorEvent
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, ErrorEvent
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
@@ -22,21 +21,21 @@ from aiogram import types, F
 
 # internal lib
 
-import root.ui_constants as uic
+from tg_vk_music_bot import ui_constants as uic
 
-from root import db_models
-from root.commander import CallbackCommander
-from root.constants import Constants
-from root.loads_demon import LoadsDemon
-from root.pager import PagersManager
-# from root.sections.soundcloud import SoundcloudSection
-from root.telegram import TelegramHandler, AdminFilter, get_full_command
-from root.sections.vk import VkSection
-from root.tracks_cache import TracksCache
+from tg_vk_music_bot import db_models
+from tg_vk_music_bot.commander import CallbackCommander
+from tg_vk_music_bot.constants import Constants
+from tg_vk_music_bot.loads_demon import LoadsDemon
+from tg_vk_music_bot.pager import PagersManager
+# from tg_vk_music_bot.sections.soundcloud import SoundcloudSection
+from tg_vk_music_bot.telegram import TelegramHandler, AdminFilter, get_full_command
+from tg_vk_music_bot.sections.vk import VkSection
+from tg_vk_music_bot.tracks_cache import TracksCache
 
 
-# from root.sections.yandex_music import YandexMusicSection
-# from root.sections.soundcloud import SoundcloudComponent
+# from tg_vk_music_bot.sections.yandex_music import YandexMusicSection
+# from tg_vk_music_bot.sections.soundcloud import SoundcloudComponent
 
 
 # function

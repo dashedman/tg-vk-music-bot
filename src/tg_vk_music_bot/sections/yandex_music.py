@@ -3,8 +3,8 @@ from logging import Logger
 
 import yandex_music
 
-from root.sections.base import AbstractSection
-from root.models import Track
+from tg_vk_music_bot.sections.base import AbstractSection
+from tg_vk_music_bot.models import Track
 
 
 class LoginResponse:

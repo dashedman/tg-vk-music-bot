@@ -1,17 +1,15 @@
-import os
 import sqlite3
 from dataclasses import dataclass
 
-from OpenSSL import crypto
 from aiogram import Bot, Dispatcher
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from vk_api import VkApi
 
-from root import tg_lib
-from root.audio import VkAudio
-from root.main import ThrottlingMiddleware
+from tg_vk_music_bot import tg_lib
+from tg_vk_music_bot.audio import VkAudio
+from tg_vk_music_bot.main import ThrottlingMiddleware
 
-import root.ui_constants as uic
+from tg_vk_music_bot import ui_constants as uic
 
 
 @dataclass

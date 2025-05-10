@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.ciphers.modes import CBC
 from moviepy.editor import AudioFileClip, AudioClip
 from urllib.request import urlopen
 
-import root
+import tg_vk_music_bot
 
 
 # https://github.com/JustChasti/m3u8-to-mp3-converter/tree/master
@@ -124,7 +124,7 @@ def m3u8_to_mp3_advanced(name, url):
 
 
 class M3u8Loader:
-    def __init__(self, bot: 'root.MusicBot'):
+    def __init__(self, bot: 'tg_vk_music_bot.MusicBot'):
         self.bot = bot
         # self.process_executor = bot.process_executor
         # self.thread_executor = bot.thread_executor

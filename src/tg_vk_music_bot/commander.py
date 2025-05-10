@@ -4,8 +4,7 @@ from typing import Callable, Coroutine, NewType
 
 import aiogram.types as agt
 
-import root.ui_constants as uic
-
+from tg_vk_music_bot import ui_constants as uic
 
 CommandId = NewType('CommandId', int)
 

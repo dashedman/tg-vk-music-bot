@@ -3,9 +3,9 @@ import os
 from configparser import ConfigParser
 
 # internal lib
-from root import MusicBot
-import root.ui_constants as uic
-from root.log_lib import get_logger
+from tg_vk_music_bot import MusicBot
+from tg_vk_music_bot import ui_constants as uic
+from tg_vk_music_bot.log_lib import get_logger
 
 
 if __name__ == "__main__":

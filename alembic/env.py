@@ -16,7 +16,7 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-from root import db_models
+from tg_vk_music_bot import db_models
 target_metadata = db_models.Base.metadata
 
 # other values from the config, defined by the needs of env.py,

@@ -6,8 +6,7 @@ import threading
 import time
 import datetime
 
-from urllib.parse import urljoin, urlparse, parse_qs, unquote
-from itertools import islice
+from urllib.parse import urlparse, parse_qs, unquote
 from pprint import pprint, pformat
 
 from bs4 import BeautifulSoup
@@ -16,16 +15,6 @@ import asyncio
 import requests
 import requests_async as arequests
 import six
-
-from requests.cookies import merge_cookies
-from requests.exceptions import (
-    ChunkedEncodingError,
-    ContentDecodingError,
-    InvalidSchema,
-    TooManyRedirects,
-)
-from requests.status_codes import codes
-from requests.utils import requote_uri, rewind_body
 
 from requests_async import adapters
 from requests_async.cookies import extract_cookies_to_jar
@@ -1384,7 +1373,7 @@ def scrap_ids_from_html(html, filter_root_el=None):
     root_el = soup.find(**filter_root_el)
 
     if root_el is None:
-        raise ValueError('Could not find root el for audio')
+        raise ValueError('Could not find tg_vk_music_bot el for audio')
 
     playlist_snippets = soup.find_all('div', {'class': "audioPlaylistSnippet__list"})
     for playlist in playlist_snippets:

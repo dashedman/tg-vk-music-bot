@@ -1,5 +1,5 @@
 from sclib.asyncio import SoundcloudAPI
-from root.sections.base import AbstractSection
+from tg_vk_music_bot.sections.base import AbstractSection
 
 
 class SoundcloudSection(AbstractSection):

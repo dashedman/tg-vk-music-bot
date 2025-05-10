@@ -1,0 +1,1 @@
+from tg_vk_music_bot.main import MusicBot

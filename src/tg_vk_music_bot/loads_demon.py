@@ -5,9 +5,9 @@ from dataclasses import dataclass
 
 import aiogram.types as agt
 
-import root
-import root.ui_constants as uic
-from root.models import Track
+import tg_vk_music_bot
+from tg_vk_music_bot import ui_constants as uic
+from tg_vk_music_bot.models import Track
 
 
 @dataclass
@@ -23,7 +23,7 @@ class LoadTask:
 
 class LoadsDemon:
 
-    def __init__(self, bot: 'root.MusicBot', queue_size: int = 1000, workers: int = 1):
+    def __init__(self, bot: 'tg_vk_music_bot.MusicBot', queue_size: int = 1000, workers: int = 1):
         self.bot = bot
         self.queue: asyncio.Queue[LoadTask] = asyncio.Queue(maxsize=queue_size)
         self.workers = workers

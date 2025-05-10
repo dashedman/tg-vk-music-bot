@@ -8,16 +8,16 @@ import aiogram.types as agt
 from aiogram.exceptions import TelegramAPIError
 
 import aitertools
-import root
-import root.ui_constants as uic
-from root.commander import CommandId
-from root.models import Track, Album
+import tg_vk_music_bot
+import tg_vk_music_bot.ui_constants as uic
+from tg_vk_music_bot.commander import CommandId
+from tg_vk_music_bot.models import Track, Album
 
 
 class PagersManager:
     def __init__(
             self,
-            bot: 'root.MusicBot',
+            bot: 'tg_vk_music_bot.MusicBot',
     ):
         self.bot = bot
         self.pager_registry: dict[str, list[Pager]] = defaultdict(list)

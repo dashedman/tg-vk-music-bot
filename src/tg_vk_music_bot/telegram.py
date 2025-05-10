@@ -17,9 +17,9 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils import chat_member
 import aiogram.types as agt
 
-from root.models import Track
+from tg_vk_music_bot.models import Track
 
-# from root.utils import ThrottlingMiddleware
+# from tg_vk_music_bot.utils import ThrottlingMiddleware
 
 
 # TODO: move to telegram utils

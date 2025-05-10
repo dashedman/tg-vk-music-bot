@@ -6,10 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 import aiogram.types as agt
 
-import root
-import root.ui_constants as uic
-from root.db_models import CachedTrack
-from root.models import Track
+import tg_vk_music_bot
+import tg_vk_music_bot.ui_constants as uic
+from tg_vk_music_bot.db_models import CachedTrack
+from tg_vk_music_bot.models import Track
 
 
 class CacheAnswer(IntEnum):
@@ -18,7 +18,7 @@ class CacheAnswer(IntEnum):
 
 
 class TracksCache:
-    def __init__(self, bot: 'root.MusicBot'):
+    def __init__(self, bot: 'tg_vk_music_bot.MusicBot'):
         self.bot = bot
         self.logger = logging.getLogger('cache')
 

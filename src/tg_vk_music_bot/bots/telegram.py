@@ -10,8 +10,8 @@ from aiogram.dispatcher.handler import current_handler, CancelHandler
 from aiogram.dispatcher.middlewares import BaseMiddleware
 from aiogram.utils import exceptions
 
-from root.bots.base import BaseBot
-from root import uic
+from tg_vk_music_bot.bots.base import BaseBot
+from tg_vk_music_bot import uic
 
 
 class ThrottlingMiddleware(BaseMiddleware):

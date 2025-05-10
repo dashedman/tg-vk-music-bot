@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 
-from root.db_models import Base
+from tg_vk_music_bot.db_models import Base
 
 
 def init_db():
