@@ -1,0 +1,29 @@
+[project]
+name = "tg-vk-music-bot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiofiles>=24.1.0",
+    "aiogram>=3.20.0.post0",
+    "aiohttp>=3.11.18",
+    "aiosqlite>=0.21.0",
+    "alembic>=1.15.2",
+    "asynciolimiter>=1.2.0",
+    "beautifulsoup4>=4.13.4",
+    "bs4>=0.0.2",
+    "cachetools>=5.5.2",
+    "coloredlogs>=15.0.1",
+    "cryptography>=44.0.3",
+    "gevent>=25.4.2",
+    "m3u8>=6.0.0",
+    "moviepy>=2.1.2",
+    "pyopenssl>=25.0.0",
+    "requests>=2.32.3",
+    "sqlalchemy~=2.0.18",
+    "vk-api",
+]
+
+[tool.uv.sources]
+vk-api = { git = "https://github.com/dashedman/vk_api.git" }
